@@ -186,7 +186,27 @@ func (h *Handler) handleDeleteItem(w http.ResponseWriter, r *http.Request, id st
 // handleListItems processes GET /items.
 func (h *Handler) handleListItems(w http.ResponseWriter, r *http.Request) {
 	typeFilter := r.URL.Query().Get("type")
-	items, err := h.store.ListItems(r.Context(), typeFilter)
+
+	// Parse tag filters - support both comma-separated and multiple params
+	var tagFilters []string
+	if tagParam := r.URL.Query().Get("tags"); tagParam != "" {
+		// Handle comma-separated tags: ?tags=tag1,tag2,tag3
+		for _, tag := range strings.Split(tagParam, ",") {
+			if trimmed := strings.TrimSpace(tag); trimmed != "" {
+				tagFilters = append(tagFilters, trimmed)
+			}
+		}
+	}
+	// Also handle multiple tag parameters: ?tag=tag1&tag=tag2&tag=tag3
+	if tagParams := r.URL.Query()["tag"]; len(tagParams) > 0 {
+		for _, tag := range tagParams {
+			if trimmed := strings.TrimSpace(tag); trimmed != "" {
+				tagFilters = append(tagFilters, trimmed)
+			}
+		}
+	}
+
+	items, err := h.store.ListItems(r.Context(), typeFilter, tagFilters)
 	if err != nil {
 		h.logger.Printf("error listing items: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
