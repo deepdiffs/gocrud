@@ -185,7 +185,8 @@ func (h *Handler) handleDeleteItem(w http.ResponseWriter, r *http.Request, id st
 
 // handleListItems processes GET /items.
 func (h *Handler) handleListItems(w http.ResponseWriter, r *http.Request) {
-	items, err := h.store.ListItems(r.Context())
+	typeFilter := r.URL.Query().Get("type")
+	items, err := h.store.ListItems(r.Context(), typeFilter)
 	if err != nil {
 		h.logger.Printf("error listing items: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

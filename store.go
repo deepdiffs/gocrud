@@ -28,6 +28,7 @@ func (s *RedisStore) SaveItem(ctx context.Context, item *Item) error {
 	pipe := s.client.Pipeline()
 	pipe.Set(ctx, key, data, 0)
 	pipe.SAdd(ctx, "items", item.ID)
+	pipe.SAdd(ctx, fmt.Sprintf("items:type:%s", item.Type), item.ID)
 	_, err = pipe.Exec(ctx)
 	return err
 }
@@ -51,20 +52,31 @@ func (s *RedisStore) GetItem(ctx context.Context, id string) (*Item, error) {
 
 // DeleteItem removes an item by ID.
 func (s *RedisStore) DeleteItem(ctx context.Context, id string) error {
+	// First get the item to know its type for cleanup
+	item, err := s.GetItem(ctx, id)
+	if err != nil {
+		return err // This will return ErrNotFound if item doesn't exist
+	}
+
 	key := fmt.Sprintf("item:%s", id)
 	pipe := s.client.Pipeline()
 	pipe.Del(ctx, key)
 	pipe.SRem(ctx, "items", id)
-	_, err := pipe.Exec(ctx)
-	if err != nil && err == redis.Nil {
-		return ErrNotFound
-	}
+	pipe.SRem(ctx, fmt.Sprintf("items:type:%s", item.Type), id)
+	_, err = pipe.Exec(ctx)
 	return err
 }
 
-// ListItems returns all items in the store.
-func (s *RedisStore) ListItems(ctx context.Context) ([]*Item, error) {
-	ids, err := s.client.SMembers(ctx, "items").Result()
+// ListItems returns all items in the store, optionally filtered by type.
+func (s *RedisStore) ListItems(ctx context.Context, typeFilter string) ([]*Item, error) {
+	var setKey string
+	if typeFilter == "" {
+		setKey = "items"
+	} else {
+		setKey = fmt.Sprintf("items:type:%s", typeFilter)
+	}
+
+	ids, err := s.client.SMembers(ctx, setKey).Result()
 	if err != nil {
 		return nil, err
 	}
