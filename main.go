@@ -15,9 +15,14 @@ func main() {
 	logger := log.New(os.Stdout, "go-crud ", log.LstdFlags|log.Lmicroseconds)
 	ctx := context.Background()
 
-	redisClient := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	// allow overriding Redis address via REDIS_ADDR env var, default to localhost:6379
+	redisAddr := os.Getenv("REDIS_ADDR")
+	if redisAddr == "" {
+		redisAddr = "localhost:6379"
+	}
+	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		logger.Fatalf("could not connect to redis: %v", err)
+		logger.Fatalf("could not connect to redis (%s): %v", redisAddr, err)
 	}
 
 	store := NewRedisStore(redisClient)
@@ -29,8 +34,13 @@ func main() {
 
 	loggedMux := loggingMiddleware(logger)(mux)
 
+	// allow overriding HTTP listen address via HTTP_ADDR env var, default to :9090
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		httpAddr = ":9090"
+	}
 	server := &http.Server{
-		Addr:         ":9090",
+		Addr:         httpAddr,
 		Handler:      loggedMux,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
