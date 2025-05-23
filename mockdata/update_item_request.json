@@ -1,0 +1,19 @@
+{
+  "type": "product",
+  "tags": ["electronics", "smartphone", "mobile", "sale"],
+  "data": {
+    "name": "iPhone 15 Pro",
+    "brand": "Apple", 
+    "price": 899.99,
+    "description": "Latest iPhone with advanced features - Now on sale!",
+    "specifications": {
+      "storage": "256GB",
+      "color": "Natural Titanium",
+      "screen_size": "6.1 inches",
+      "camera": "48MP main camera"
+    },
+    "in_stock": true,
+    "category": "smartphones",
+    "discount": "10%"
+  }
+} 

@@ -1,0 +1,33 @@
+{
+  "type": "task",
+  "tags": ["work", "urgent", "backend"],
+  "data": {
+    "title": "Implement user authentication API",
+    "description": "Add JWT-based authentication system with login, logout, and token refresh endpoints",
+    "status": "pending",
+    "priority": "high",
+    "assignee": "john.doe@company.com",
+    "dueDate": "2024-02-15T18:00:00Z",
+    "estimatedHours": 8,
+    "labels": ["api", "security", "authentication"],
+    "dependencies": ["setup-database", "create-user-model"],
+    "checklist": [
+      {
+        "item": "Design API endpoints",
+        "completed": true
+      },
+      {
+        "item": "Implement JWT token generation",
+        "completed": false
+      },
+      {
+        "item": "Add middleware for authentication",
+        "completed": false
+      },
+      {
+        "item": "Write unit tests",
+        "completed": false
+      }
+    ]
+  }
+} 

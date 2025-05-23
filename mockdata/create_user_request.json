@@ -1,0 +1,21 @@
+{
+  "type": "user",
+  "tags": ["customer", "premium", "verified"],
+  "data": {
+    "username": "john_doe",
+    "email": "john.doe@example.com",
+    "firstName": "John",
+    "lastName": "Doe",
+    "profile": {
+      "bio": "Software engineer passionate about technology",
+      "location": "San Francisco, CA",
+      "website": "https://johndoe.dev"
+    },
+    "preferences": {
+      "newsletter": true,
+      "notifications": "email",
+      "theme": "dark"
+    },
+    "joinDate": "2024-01-15T10:30:00Z"
+  }
+} 
