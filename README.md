@@ -10,10 +10,11 @@
 
  ## Local Build & Run
 
- ```bash
- go build -o gocrud main.go
- ./gocrud
- ```
+```bash
+export API_KEYS="<your-api-key>"
+go build -o gocrud main.go
+./gocrud
+```
 
  The server listens on port 9090 by default and connects to Redis at localhost:6379.
 
@@ -21,8 +22,9 @@
 
  Environment variables:
 
- * `REDIS_ADDR` – Redis address (default: `localhost:6379`)
- * `HTTP_ADDR` – HTTP listen address (default: `:9090`)
+* `REDIS_ADDR` – Redis address (default: `localhost:6379`)
+* `HTTP_ADDR` – HTTP listen address (default: `:9090`)
+* `API_KEYS` – comma-separated list of valid API keys (required)
 
  ## Docker
 
@@ -39,21 +41,24 @@
    .
  ```
 
- Run the container (connecting to host Redis):
+Run the container (connecting to host Redis):
 
  ### Linux
 
- ```bash
- docker run --rm --network host gocrud:latest
- ```
+```bash
+docker run --rm --network host \
+  -e API_KEYS="<your-api-key>" \
+  gocrud:latest
+```
 
  ### macOS
 
- ```bash
- docker run --rm -p 9090:9090 \
-   -e REDIS_ADDR=host.docker.internal:6379 \
-   gocrud:latest
- ```
+```bash
+docker run --rm -p 9090:9090 \
+  -e API_KEYS="<your-api-key>" \
+  -e REDIS_ADDR=host.docker.internal:6379 \
+  gocrud:latest
+```
 
  ## API Endpoints
 

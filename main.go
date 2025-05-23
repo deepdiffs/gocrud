@@ -32,7 +32,14 @@ func main() {
 	mux.HandleFunc("/items", handler.itemsHandler)
 	mux.HandleFunc("/items/", handler.itemHandler)
 
-	loggedMux := loggingMiddleware(logger)(mux)
+	// Load API keys for authentication (comma-separated list in API_KEYS env var).
+	keysEnv := os.Getenv("API_KEYS")
+	if keysEnv == "" {
+		logger.Fatal("environment variable API_KEYS is required for authentication")
+	}
+	validKeys := parseAPIKeys(keysEnv)
+	authMux := authMiddleware(validKeys)(mux)
+	loggedMux := loggingMiddleware(logger)(authMux)
 
 	// allow overriding HTTP listen address via HTTP_ADDR env var, default to :9090
 	httpAddr := os.Getenv("HTTP_ADDR")
