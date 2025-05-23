@@ -64,3 +64,12 @@
  | GET    | `/items/{id}` | Retrieve an item by ID              |
  | PUT    | `/items/{id}` | Update an item                      |
  | DELETE | `/items/{id}` | Delete an item                      |
+
+## Integration Tests
+
+An end-to-end integration test suite is provided in `integration_test.go`. It starts the HTTP server and exercises all CRUD operations against Redis.
+Make sure a Redis instance is running at `localhost:6379`, then run:
+
+```bash
+go test -timeout 1m
+```
