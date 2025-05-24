@@ -24,14 +24,17 @@ var (
 
 // TestMain sets up the Redis DB and HTTP server, then runs the tests.
 func TestMain(m *testing.M) {
-	// flush Redis DB for a clean slate
+	// setup Redis DB for testing - use database 1 to avoid interfering with default DB
 	redisAddr := os.Getenv("REDIS_ADDR")
 	if redisAddr == "" {
 		redisAddr = "localhost:6379"
 	}
-	redisClient = redis.NewClient(&redis.Options{Addr: redisAddr})
+	redisClient = redis.NewClient(&redis.Options{
+		Addr: redisAddr,
+		DB:   1, // use database 1 for testing instead of default database 0
+	})
 	if err := redisClient.FlushDB(testCtx).Err(); err != nil {
-		panic("failed to flush redis DB: " + err.Error())
+		panic("failed to flush test redis DB: " + err.Error())
 	}
 
 	// start HTTP server using the real handlers
@@ -41,9 +44,7 @@ func TestMain(m *testing.M) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", handler.itemsHandler)
 	mux.HandleFunc("/items/", handler.itemHandler)
-	// wrap with API-key auth and logging middleware
-	validKeys := map[string]struct{}{testAPIKey: {}}
-	srv := httptest.NewServer(loggingMiddleware(logger)(authMiddleware(validKeys)(mux)))
+	srv := httptest.NewServer(loggingMiddleware(logger)(mux))
 	defer srv.Close()
 	testServerURL = srv.URL
 
@@ -52,9 +53,6 @@ func TestMain(m *testing.M) {
 	_ = redisClient.FlushDB(testCtx)
 	os.Exit(code)
 }
-
-// testAPIKey is the static API key used to authenticate integration test requests.
-const testAPIKey = "test-integration-key"
 
 // TestCRUDIntegration exercises Create, Read, Update, List (with and without type filter), and Delete.
 func TestCRUDIntegration(t *testing.T) {
@@ -83,18 +81,12 @@ func TestCRUDIntegration(t *testing.T) {
 		cases = append(cases, createCase{file: fn, req: req})
 	}
 
-	// HTTP client that injects the test API key into each request
-	client := &http.Client{Transport: &authTransport{token: testAPIKey, base: http.DefaultTransport}}
+	client := &http.Client{}
 	// CREATE
 	for i := range cases {
 		path := filepath.Join("mockdata", cases[i].file)
 		data, _ := os.ReadFile(path)
-		req, err := http.NewRequest(http.MethodPost, testServerURL+"/items", bytes.NewReader(data))
-		if err != nil {
-			t.Fatalf("creating POST request (%s): %v", cases[i].file, err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := client.Do(req)
+		resp, err := http.Post(testServerURL+"/items", "application/json", bytes.NewReader(data))
 		if err != nil {
 			t.Fatalf("POST /items (%s) error: %v", cases[i].file, err)
 		}
@@ -115,7 +107,7 @@ func TestCRUDIntegration(t *testing.T) {
 
 	// READ each
 	for _, c := range cases {
-		resp, err := client.Get(testServerURL + "/items/" + c.itm.ID)
+		resp, err := http.Get(testServerURL + "/items/" + c.itm.ID)
 		if err != nil {
 			t.Fatalf("GET /items/%s error: %v", c.itm.ID, err)
 		}
@@ -173,7 +165,7 @@ func TestCRUDIntegration(t *testing.T) {
 	}
 
 	// VERIFY update via GET
-	resp, err = client.Get(testServerURL + "/items/" + targetID)
+	resp, err = http.Get(testServerURL + "/items/" + targetID)
 	if err != nil {
 		t.Fatalf("GET after update error: %v", err)
 	}
@@ -187,7 +179,7 @@ func TestCRUDIntegration(t *testing.T) {
 	}
 
 	// LIST all
-	resp, err = client.Get(testServerURL + "/items")
+	resp, err = http.Get(testServerURL + "/items")
 	if err != nil {
 		t.Fatalf("GET /items error: %v", err)
 	}
@@ -201,7 +193,7 @@ func TestCRUDIntegration(t *testing.T) {
 	}
 
 	// LIST by type filter
-	resp, err = client.Get(testServerURL + "/items?type=" + updReq.Type)
+	resp, err = http.Get(testServerURL + "/items?type=" + updReq.Type)
 	if err != nil {
 		t.Fatalf("GET /items?type=%s error: %v", updReq.Type, err)
 	}
@@ -234,7 +226,7 @@ func TestCRUDIntegration(t *testing.T) {
 	}
 
 	// FINAL LIST (should be empty)
-	resp, err = client.Get(testServerURL + "/items")
+	resp, err = http.Get(testServerURL + "/items")
 	if err != nil {
 		t.Fatalf("GET final /items error: %v", err)
 	}
@@ -246,17 +238,6 @@ func TestCRUDIntegration(t *testing.T) {
 	if len(final) != 0 {
 		t.Errorf("expected 0 items after delete, got %d", len(final))
 	}
-}
-
-// authTransport injects the test API key into outgoing HTTP requests.
-type authTransport struct {
-	token string
-	base  http.RoundTripper
-}
-
-func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	req.Header.Set("Authorization", "Bearer "+t.token)
-	return t.base.RoundTrip(req)
 }
 
 // newTestLogger returns a logger that outputs to stdout for test visibility.

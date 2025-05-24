@@ -60,7 +60,19 @@ docker run --rm -p 9090:9090 \
   gocrud:latest
 ```
 
- ## API Endpoints
+### Docker Compose
+
+Use Docker Compose to run gocrud and Redis together:
+
+```bash
+# Create a .env file containing your API keys (or export API_KEYS in your shell):
+echo 'API_KEYS="<your-api-key>"' > .env
+docker compose up --build
+```
+
+The HTTP API will be available at http://localhost:9090.
+
+## API Endpoints
 
  | Method | Path          | Description                         |
  | ------ | ------------- | ----------------------------------- |
