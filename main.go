@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -18,17 +19,20 @@ func main() {
 
 	logger.Printf("INFO: Starting go-crud application")
 
-	// allow overriding Redis address via REDIS_ADDR env var, default to localhost:6379
 	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "host.docker.internal:6379"
-		logger.Printf("INFO: REDIS_ADDR not set, using default: %s", redisAddr)
-	} else {
-		logger.Printf("INFO: Using Redis address from environment: %s", redisAddr)
-	}
 
 	logger.Printf("INFO: Initializing Redis client")
-	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr})
+	// pick the right redis DB from the env var
+	redisDB := os.Getenv("REDIS_DB")
+	if redisDB == "" {
+		redisDB = "0"
+	}
+	redisDBInt, err := strconv.Atoi(redisDB)
+	if err != nil {
+		logger.Fatalf("FATAL: could not convert REDIS_DB to int: %v", err)
+	}
+
+	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr, DB: redisDBInt})
 
 	logger.Printf("INFO: Testing Redis connection...")
 	start := time.Now()
