@@ -31,7 +31,7 @@ func TestMain(m *testing.M) {
 	}
 	redisClient = redis.NewClient(&redis.Options{
 		Addr: redisAddr,
-		DB:   1, // use database 1 for testing instead of default database 0
+		DB:   15, // use database 15 for testing instead of default database 0
 	})
 	if err := redisClient.FlushDB(testCtx).Err(); err != nil {
 		panic("failed to flush test redis DB: " + err.Error())
