@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  gocrud:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        TARGETOS: linux
+        TARGETARCH: amd64
+    ports:
+      - "9090:9090"
+    environment:
+      REDIS_ADDR: "redis:6379" 
+      API_KEYS: "${API_KEYS}"
+      HTTP_ADDR: ":9090"
+    restart: unless-stopped
+    # Connect this service to the external 'monitoring-net'
+    networks:
+      - health-api_monitoring-net
+
+# Declare that 'monitoring-net' is an existing, external network
+# and not something this docker-compose file should create.
+networks:
+  health-api_monitoring-net:
+    external: true

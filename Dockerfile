@@ -1,9 +1,7 @@
-syntax=docker/dockerfile:1
-
 ARG TARGETOS
 ARG TARGETARCH
 
-FROM golang:1.21-alpine AS builder
+FROM golang:1.23-alpine AS builder
 WORKDIR /app
 
 # cache dependencies
@@ -13,7 +11,7 @@ RUN go mod download
 # build application
 COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -o /gocrud main.go
+    go build -o /gocrud .
 
 FROM scratch
 COPY --from=builder /gocrud /gocrud
