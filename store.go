@@ -16,19 +16,21 @@ type Store interface {
 }
 
 // NewStore creates a Store implementation based on the STORAGE_BACKEND environment variable.
-// Currently supports "redis" backend.
-// Returns an error if STORAGE_BACKEND is not set, unsupported, or connection fails.
+// Supports "memory" (default) and "redis" backends.
+// Returns an error if STORAGE_BACKEND is set to an unsupported value or connection fails.
 func NewStore(ctx context.Context, logger *log.Logger) (Store, error) {
 	backend := os.Getenv("STORAGE_BACKEND")
 	if backend == "" {
-		return nil, fmt.Errorf("STORAGE_BACKEND environment variable is required")
+		backend = "memory" // Default to in-memory store
 	}
 
 	switch backend {
+	case "memory":
+		return NewMemoryStore(logger), nil
 	case "redis":
 		return newRedisStoreFromEnv(ctx, logger)
 
 	default:
-		return nil, fmt.Errorf("unsupported STORAGE_BACKEND: %s (supported: redis)", backend)
+		return nil, fmt.Errorf("unsupported STORAGE_BACKEND: %s (supported: memory, redis)", backend)
 	}
 }
