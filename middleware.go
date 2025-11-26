@@ -125,36 +125,19 @@ func logOutgoingResponse(rw *responseWriter, duration time.Duration) string {
 func authMiddleware(validKeys map[string]struct{}, logger *log.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Log all headers for debugging
-			logger.Printf("[AUTH] Request: %s %s", r.Method, r.URL.Path)
-			logger.Printf("[AUTH] All headers:")
-			for name, values := range r.Header {
-				for _, value := range values {
-					logger.Printf("[AUTH]   %s: %s", name, value)
-				}
-			}
-
-			// Extract and log API key
-			apiKeyRaw := r.Header.Get("X-API-Key")
-			logger.Printf("[AUTH] Raw X-API-Key header value: %q", apiKeyRaw)
-			apiKey := strings.TrimSpace(apiKeyRaw)
-			logger.Printf("[AUTH] Trimmed API key: %q (length: %d)", apiKey, len(apiKey))
-
+			apiKey := strings.TrimSpace(r.Header.Get("X-API-Key"))
 			if apiKey == "" {
-				logger.Printf("[AUTH] ERROR: API key is empty or missing")
+				logger.Printf("[AUTH] ERROR: API key is missing from request")
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
 
-			// Log validation attempt
-			logger.Printf("[AUTH] Validating API key (checking against %d valid keys)", len(validKeys))
 			if _, ok := validKeys[apiKey]; !ok {
-				logger.Printf("[AUTH] ERROR: Invalid API key provided")
+				logger.Printf("[AUTH] ERROR: Invalid API key provided for %s %s", r.Method, r.URL.Path)
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
 
-			logger.Printf("[AUTH] Authentication successful")
 			next.ServeHTTP(w, r)
 		})
 	}
