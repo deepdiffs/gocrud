@@ -14,12 +14,3 @@ services:
       API_KEYS: "${API_KEYS}"
       HTTP_ADDR: ":9090"
     restart: unless-stopped
-    # Connect this service to the external 'monitoring-net'
-    networks:
-      - health-api_monitoring-net
-
-# Declare that 'monitoring-net' is an existing, external network
-# and not something this docker-compose file should create.
-networks:
-  health-api_monitoring-net:
-    external: true
