@@ -72,6 +72,15 @@ docker compose up --build
 
 The HTTP API will be available at http://localhost:9090.
 
+## Authentication
+
+All API endpoints require authentication via the `X-API-Key` header. The API key must be one of the keys specified in the `API_KEYS` environment variable.
+
+Example request:
+```bash
+curl -H "X-API-Key: your-api-key-here" http://localhost:9090/items
+```
+
 ## API Endpoints
 
  | Method | Path          | Description                         |
@@ -81,6 +90,8 @@ The HTTP API will be available at http://localhost:9090.
  | GET    | `/items/{id}` | Retrieve an item by ID              |
  | PUT    | `/items/{id}` | Update an item                      |
  | DELETE | `/items/{id}` | Delete an item                      |
+
+All endpoints require the `X-API-Key` header for authentication.
 
 ## Integration Tests
 

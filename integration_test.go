@@ -15,8 +15,19 @@ import (
 )
 
 var (
-	testCtx = context.Background()
+	testCtx     = context.Background()
+	testAPIKey  = "test-api-key-123"
 )
+
+// makeAuthenticatedRequest creates an HTTP request with the X-API-Key header set.
+func makeAuthenticatedRequest(method, url string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequest(method, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-API-Key", testAPIKey)
+	return req, nil
+}
 
 // setupTestServer creates a test HTTP server with the specified storage backend.
 // Returns the server URL and a cleanup function.
@@ -59,7 +70,11 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", handler.itemsHandler)
 	mux.HandleFunc("/items/", handler.itemHandler)
-	srv := httptest.NewServer(loggingMiddleware(logger)(mux))
+	
+	// Set up authentication for tests
+	validKeys := parseAPIKeys(testAPIKey)
+	authMux := authMiddleware(validKeys)(mux)
+	srv := httptest.NewServer(loggingMiddleware(logger)(authMux))
 
 	cleanup := func() {
 		srv.Close()
@@ -120,7 +135,12 @@ func TestCRUDIntegration(t *testing.T) {
 			for i := range cases {
 				path := filepath.Join("mockdata", cases[i].file)
 				data, _ := os.ReadFile(path)
-				resp, err := http.Post(testServerURL+"/items", "application/json", bytes.NewReader(data))
+				req, err := makeAuthenticatedRequest(http.MethodPost, testServerURL+"/items", bytes.NewReader(data))
+				if err != nil {
+					t.Fatalf("creating POST request (%s): %v", cases[i].file, err)
+				}
+				req.Header.Set("Content-Type", "application/json")
+				resp, err := client.Do(req)
 				if err != nil {
 					t.Fatalf("POST /items (%s) error: %v", cases[i].file, err)
 				}
@@ -141,7 +161,11 @@ func TestCRUDIntegration(t *testing.T) {
 
 			// READ each
 			for _, c := range cases {
-				resp, err := http.Get(testServerURL + "/items/" + c.itm.ID)
+				req, err := makeAuthenticatedRequest(http.MethodGet, testServerURL+"/items/"+c.itm.ID, nil)
+				if err != nil {
+					t.Fatalf("creating GET request: %v", err)
+				}
+				resp, err := client.Do(req)
 				if err != nil {
 					t.Fatalf("GET /items/%s error: %v", c.itm.ID, err)
 				}
@@ -170,7 +194,7 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 			targetID := cases[0].itm.ID
 
-			req, err := http.NewRequest(http.MethodPut, testServerURL+"/items/"+targetID, bytes.NewReader(updData))
+			req, err := makeAuthenticatedRequest(http.MethodPut, testServerURL+"/items/"+targetID, bytes.NewReader(updData))
 			if err != nil {
 				t.Fatalf("creating PUT request: %v", err)
 			}
@@ -199,7 +223,11 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 
 			// VERIFY update via GET
-			resp, err = http.Get(testServerURL + "/items/" + targetID)
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/items/"+targetID, nil)
+			if err != nil {
+				t.Fatalf("creating GET request after update: %v", err)
+			}
+			resp, err = client.Do(req)
 			if err != nil {
 				t.Fatalf("GET after update error: %v", err)
 			}
@@ -213,7 +241,11 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 
 			// LIST all
-			resp, err = http.Get(testServerURL + "/items")
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/items", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for list: %v", err)
+			}
+			resp, err = client.Do(req)
 			if err != nil {
 				t.Fatalf("GET /items error: %v", err)
 			}
@@ -227,7 +259,11 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 
 			// LIST by type filter
-			resp, err = http.Get(testServerURL + "/items?type=" + updReq.Type)
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/items?type="+updReq.Type, nil)
+			if err != nil {
+				t.Fatalf("creating GET request for filtered list: %v", err)
+			}
+			resp, err = client.Do(req)
 			if err != nil {
 				t.Fatalf("GET /items?type=%s error: %v", updReq.Type, err)
 			}
@@ -245,7 +281,7 @@ func TestCRUDIntegration(t *testing.T) {
 
 			// DELETE all
 			for _, c := range cases {
-				req, err := http.NewRequest(http.MethodDelete, testServerURL+"/items/"+c.itm.ID, nil)
+				req, err := makeAuthenticatedRequest(http.MethodDelete, testServerURL+"/items/"+c.itm.ID, nil)
 				if err != nil {
 					t.Fatalf("creating DELETE request: %v", err)
 				}
@@ -260,7 +296,11 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 
 			// FINAL LIST (should be empty)
-			resp, err = http.Get(testServerURL + "/items")
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/items", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for final list: %v", err)
+			}
+			resp, err = client.Do(req)
 			if err != nil {
 				t.Fatalf("GET final /items error: %v", err)
 			}
