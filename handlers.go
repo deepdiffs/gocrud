@@ -14,12 +14,12 @@ import (
 
 // Handler handles HTTP requests for items.
 type Handler struct {
-	store  *RedisStore
+	store  Store
 	logger *log.Logger
 }
 
 // NewHandler creates a Handler with dependencies.
-func NewHandler(store *RedisStore, logger *log.Logger) *Handler {
+func NewHandler(store Store, logger *log.Logger) *Handler {
 	return &Handler{store: store, logger: logger}
 }
 

@@ -6,10 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"time"
-
-	"github.com/go-redis/redis/v8"
 )
 
 func main() {
@@ -18,26 +15,11 @@ func main() {
 
 	logger.Printf("Starting go-crud application")
 
-	redisAddr := os.Getenv("REDIS_ADDR")
-
-	// pick the right redis DB from the env var
-	redisDB := os.Getenv("REDIS_DB")
-	if redisDB == "" {
-		redisDB = "0"
-	}
-	redisDBInt, err := strconv.Atoi(redisDB)
+	store, err := NewStore(ctx, logger)
 	if err != nil {
-		logger.Fatalf("FATAL: could not convert REDIS_DB to int: %v", err)
+		logger.Fatalf("FATAL: failed to initialize store: %v", err)
 	}
 
-	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr, DB: redisDBInt})
-
-	// Test Redis connection
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		logger.Fatalf("FATAL: could not connect to redis (%s): %v", redisAddr, err)
-	}
-
-	store := NewRedisStore(redisClient)
 	handler := NewHandler(store, logger)
 
 	mux := http.NewServeMux()
