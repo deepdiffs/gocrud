@@ -1,4 +1,4 @@
-package main
+package handlers
 
 import (
 	"encoding/json"
@@ -9,22 +9,26 @@ import (
 	"strings"
 	"time"
 
+	"gocrud/internal/errors"
+	"gocrud/internal/models"
+	"gocrud/internal/store"
+
 	"github.com/google/uuid"
 )
 
 // Handler handles HTTP requests for items.
 type Handler struct {
-	store  Store
+	store  store.Store
 	logger *log.Logger
 }
 
 // NewHandler creates a Handler with dependencies.
-func NewHandler(store Store, logger *log.Logger) *Handler {
+func NewHandler(store store.Store, logger *log.Logger) *Handler {
 	return &Handler{store: store, logger: logger}
 }
 
-// itemsHandler routes requests without ID: GET for list, POST for create.
-func (h *Handler) itemsHandler(w http.ResponseWriter, r *http.Request) {
+// ItemsHandler routes requests without ID: GET for list, POST for create.
+func (h *Handler) ItemsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		h.handleListItems(w, r)
@@ -36,8 +40,8 @@ func (h *Handler) itemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// itemHandler routes requests with ID: GET, PUT, DELETE.
-func (h *Handler) itemHandler(w http.ResponseWriter, r *http.Request) {
+// ItemHandler routes requests with ID: GET, PUT, DELETE.
+func (h *Handler) ItemHandler(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimPrefix(r.URL.Path, "/items/")
 	if id == "" {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -58,7 +62,7 @@ func (h *Handler) itemHandler(w http.ResponseWriter, r *http.Request) {
 
 // handleCreateItem processes POST /items.
 func (h *Handler) handleCreateItem(w http.ResponseWriter, r *http.Request) {
-	var req CreateItemRequest
+	var req models.CreateItemRequest
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
@@ -81,7 +85,7 @@ func (h *Handler) handleCreateItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC()
-	item := &Item{
+	item := &models.Item{
 		ID:           uuid.NewString(),
 		Type:         req.Type,
 		Tags:         req.Tags,
@@ -106,7 +110,7 @@ func (h *Handler) handleCreateItem(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGetItem(w http.ResponseWriter, r *http.Request, id string) {
 	item, err := h.store.GetItem(r.Context(), id)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == errors.ErrNotFound {
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		} else {
 			h.logger.Printf("error getting item: %v", err)
@@ -120,7 +124,7 @@ func (h *Handler) handleGetItem(w http.ResponseWriter, r *http.Request, id strin
 
 // handleUpdateItem processes PUT /items/{id}.
 func (h *Handler) handleUpdateItem(w http.ResponseWriter, r *http.Request, id string) {
-	var req UpdateItemRequest
+	var req models.UpdateItemRequest
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
@@ -144,7 +148,7 @@ func (h *Handler) handleUpdateItem(w http.ResponseWriter, r *http.Request, id st
 
 	item, err := h.store.GetItem(r.Context(), id)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == errors.ErrNotFound {
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		} else {
 			h.logger.Printf("error fetching item for update: %v", err)
@@ -172,7 +176,7 @@ func (h *Handler) handleUpdateItem(w http.ResponseWriter, r *http.Request, id st
 func (h *Handler) handleDeleteItem(w http.ResponseWriter, r *http.Request, id string) {
 	err := h.store.DeleteItem(r.Context(), id)
 	if err != nil {
-		if err == ErrNotFound {
+		if err == errors.ErrNotFound {
 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		} else {
 			h.logger.Printf("error deleting item: %v", err)
@@ -224,3 +228,4 @@ func ensureSingleJSON(dec *json.Decoder) error {
 	}
 	return nil
 }
+

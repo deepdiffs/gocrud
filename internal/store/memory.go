@@ -1,15 +1,18 @@
-package main
+package store
 
 import (
 	"context"
 	"log"
 	"sync"
+
+	"gocrud/internal/errors"
+	"gocrud/internal/models"
 )
 
 // MemoryStore provides item persistence in memory using maps.
 type MemoryStore struct {
 	mu          sync.RWMutex
-	items       map[string]*Item
+	items       map[string]*models.Item
 	typeIndex   map[string]map[string]bool // type -> set of item IDs
 	tagIndex    map[string]map[string]bool // tag -> set of item IDs
 	logger      *log.Logger
@@ -19,7 +22,7 @@ type MemoryStore struct {
 func NewMemoryStore(logger *log.Logger) *MemoryStore {
 	logger.Printf("INFO: Creating new MemoryStore instance")
 	return &MemoryStore{
-		items:     make(map[string]*Item),
+		items:     make(map[string]*models.Item),
 		typeIndex: make(map[string]map[string]bool),
 		tagIndex:  make(map[string]map[string]bool),
 		logger:    logger,
@@ -27,7 +30,7 @@ func NewMemoryStore(logger *log.Logger) *MemoryStore {
 }
 
 // SaveItem stores a new or updated item in memory.
-func (s *MemoryStore) SaveItem(ctx context.Context, item *Item) error {
+func (s *MemoryStore) SaveItem(ctx context.Context, item *models.Item) error {
 	s.logger.Printf("INFO: Starting SaveItem operation for item ID: %s", item.ID)
 
 	s.mu.Lock()
@@ -85,7 +88,7 @@ func (s *MemoryStore) SaveItem(ctx context.Context, item *Item) error {
 }
 
 // GetItem retrieves an item by ID.
-func (s *MemoryStore) GetItem(ctx context.Context, id string) (*Item, error) {
+func (s *MemoryStore) GetItem(ctx context.Context, id string) (*models.Item, error) {
 	s.logger.Printf("INFO: Starting GetItem operation for item ID: %s", id)
 
 	s.mu.RLock()
@@ -94,7 +97,7 @@ func (s *MemoryStore) GetItem(ctx context.Context, id string) (*Item, error) {
 	item, exists := s.items[id]
 	if !exists {
 		s.logger.Printf("INFO: Item not found (ID: %s)", id)
-		return nil, ErrNotFound
+		return nil, errors.ErrNotFound
 	}
 
 	s.logger.Printf("INFO: Successfully completed GetItem operation for item ID: %s", id)
@@ -111,7 +114,7 @@ func (s *MemoryStore) DeleteItem(ctx context.Context, id string) error {
 	item, exists := s.items[id]
 	if !exists {
 		s.logger.Printf("INFO: Item not found for deletion (ID: %s)", id)
-		return ErrNotFound
+		return errors.ErrNotFound
 	}
 
 	// Remove from type index
@@ -142,7 +145,7 @@ func (s *MemoryStore) DeleteItem(ctx context.Context, id string) error {
 }
 
 // ListItems returns all items in the store, optionally filtered by type and/or tags.
-func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*Item, error) {
+func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*models.Item, error) {
 	s.logger.Printf("INFO: Starting ListItems operation - typeFilter: %q, tagFilters: %v", typeFilter, tagFilters)
 
 	s.mu.RLock()
@@ -155,7 +158,7 @@ func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilte
 		typeSet, ok := s.typeIndex[typeFilter]
 		if !ok {
 			s.logger.Printf("INFO: No items found for type filter: %s", typeFilter)
-			return []*Item{}, nil
+			return []*models.Item{}, nil
 		}
 		candidateIDs = make(map[string]bool)
 		for id := range typeSet {
@@ -176,7 +179,7 @@ func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilte
 		tagSet, ok := s.tagIndex[tag]
 		if !ok {
 			s.logger.Printf("INFO: No items found for tag filter: %s", tag)
-			return []*Item{}, nil
+			return []*models.Item{}, nil
 		}
 
 		// Intersect with candidate set
@@ -190,11 +193,11 @@ func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilte
 
 	if len(candidateIDs) == 0 {
 		s.logger.Printf("INFO: No items found matching filters")
-		return []*Item{}, nil
+		return []*models.Item{}, nil
 	}
 
 	// Build result list
-	items := make([]*Item, 0, len(candidateIDs))
+	items := make([]*models.Item, 0, len(candidateIDs))
 	for id := range candidateIDs {
 		if item, exists := s.items[id]; exists {
 			items = append(items, item)

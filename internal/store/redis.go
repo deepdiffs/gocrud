@@ -1,29 +1,30 @@
-package main
+package store
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"strconv"
+
+	"gocrud/internal/errors"
+	"gocrud/internal/models"
 
 	"github.com/go-redis/redis/v8"
 )
 
 // RedisStore provides item persistence in Redis.
 type RedisStore struct {
-	client *redis.Client
+	Client *redis.Client
 }
 
 // NewRedisStore creates a new RedisStore.
 func NewRedisStore(client *redis.Client) *RedisStore {
 	log.Printf("INFO: Creating new RedisStore instance")
-	return &RedisStore{client: client}
+	return &RedisStore{Client: client}
 }
 
 // SaveItem stores a new or updated item in Redis.
-func (s *RedisStore) SaveItem(ctx context.Context, item *Item) error {
+func (s *RedisStore) SaveItem(ctx context.Context, item *models.Item) error {
 	log.Printf("INFO: Starting SaveItem operation for item ID: %s", item.ID)
 
 	key := fmt.Sprintf("item:%s", item.ID)
@@ -32,7 +33,7 @@ func (s *RedisStore) SaveItem(ctx context.Context, item *Item) error {
 	// For updates, we need to clean up old indexes first
 	log.Printf("INFO: Checking if item exists for cleanup of old indexes")
 	oldItem, err := s.GetItem(ctx, item.ID)
-	if err != nil && err != ErrNotFound {
+	if err != nil && err != errors.ErrNotFound {
 		log.Printf("ERROR: Failed to get existing item for cleanup: %v", err)
 		return err
 	}
@@ -50,7 +51,7 @@ func (s *RedisStore) SaveItem(ctx context.Context, item *Item) error {
 	}
 	log.Printf("INFO: Successfully marshaled item to JSON, size: %d bytes", len(data))
 
-	pipe := s.client.Pipeline()
+	pipe := s.Client.Pipeline()
 	pipe.Set(ctx, key, data, 0)
 	pipe.SAdd(ctx, "items", item.ID)
 
@@ -88,17 +89,17 @@ func (s *RedisStore) SaveItem(ctx context.Context, item *Item) error {
 }
 
 // GetItem retrieves an item by ID.
-func (s *RedisStore) GetItem(ctx context.Context, id string) (*Item, error) {
+func (s *RedisStore) GetItem(ctx context.Context, id string) (*models.Item, error) {
 	log.Printf("INFO: Starting GetItem operation for item ID: %s", id)
 
 	key := fmt.Sprintf("item:%s", id)
 	log.Printf("INFO: Using Redis key: %s", key)
 
-	data, err := s.client.Get(ctx, key).Result()
+	data, err := s.Client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
 			log.Printf("INFO: Item not found in Redis (ID: %s)", id)
-			return nil, ErrNotFound
+			return nil, errors.ErrNotFound
 		}
 		log.Printf("ERROR: Failed to get item from Redis (ID: %s): %v", id, err)
 		return nil, err
@@ -106,7 +107,7 @@ func (s *RedisStore) GetItem(ctx context.Context, id string) (*Item, error) {
 
 	log.Printf("INFO: Successfully retrieved item data from Redis (ID: %s), size: %d bytes", id, len(data))
 
-	var item Item
+	var item models.Item
 	if err := json.Unmarshal([]byte(data), &item); err != nil {
 		log.Printf("ERROR: Failed to unmarshal item JSON (ID: %s): %v", id, err)
 		return nil, err
@@ -131,7 +132,7 @@ func (s *RedisStore) DeleteItem(ctx context.Context, id string) error {
 	key := fmt.Sprintf("item:%s", id)
 	log.Printf("INFO: Using Redis key for deletion: %s", key)
 
-	pipe := s.client.Pipeline()
+	pipe := s.Client.Pipeline()
 	pipe.Del(ctx, key)
 	pipe.SRem(ctx, "items", id)
 	pipe.SRem(ctx, fmt.Sprintf("items:type:%s", item.Type), id)
@@ -156,7 +157,7 @@ func (s *RedisStore) DeleteItem(ctx context.Context, id string) error {
 }
 
 // ListItems returns all items in the store, optionally filtered by type and/or tags.
-func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*Item, error) {
+func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*models.Item, error) {
 	log.Printf("INFO: Starting ListItems operation - typeFilter: %q, tagFilters: %v", typeFilter, tagFilters)
 
 	var setKeys []string
@@ -180,15 +181,15 @@ func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilter
 	if len(setKeys) == 0 {
 		// No filters, return all items
 		log.Printf("INFO: No filters applied, retrieving all items")
-		ids, err = s.client.SMembers(ctx, "items").Result()
+		ids, err = s.Client.SMembers(ctx, "items").Result()
 	} else if len(setKeys) == 1 {
 		// Single filter
 		log.Printf("INFO: Using single filter: %s", setKeys[0])
-		ids, err = s.client.SMembers(ctx, setKeys[0]).Result()
+		ids, err = s.Client.SMembers(ctx, setKeys[0]).Result()
 	} else {
 		// Multiple filters - use intersection
 		log.Printf("INFO: Using intersection of %d filters", len(setKeys))
-		ids, err = s.client.SInter(ctx, setKeys...).Result()
+		ids, err = s.Client.SInter(ctx, setKeys...).Result()
 	}
 
 	if err != nil {
@@ -200,11 +201,11 @@ func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilter
 
 	if len(ids) == 0 {
 		log.Printf("INFO: No items found matching filters")
-		return []*Item{}, nil
+		return []*models.Item{}, nil
 	}
 
 	log.Printf("INFO: Starting batch retrieval of %d items", len(ids))
-	pipe := s.client.Pipeline()
+	pipe := s.Client.Pipeline()
 	cmds := make([]*redis.StringCmd, len(ids))
 	for i, id := range ids {
 		key := fmt.Sprintf("item:%s", id)
@@ -217,7 +218,7 @@ func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilter
 		return nil, err
 	}
 
-	items := make([]*Item, 0, len(ids))
+	items := make([]*models.Item, 0, len(ids))
 	successCount := 0
 	missingCount := 0
 	errorCount := 0
@@ -235,7 +236,7 @@ func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilter
 			return nil, err
 		}
 
-		var item Item
+		var item models.Item
 		if err := json.Unmarshal([]byte(data), &item); err != nil {
 			log.Printf("ERROR: Failed to unmarshal item JSON (ID: %s): %v", ids[i], err)
 			errorCount++
@@ -251,29 +252,3 @@ func (s *RedisStore) ListItems(ctx context.Context, typeFilter string, tagFilter
 	return items, nil
 }
 
-// newRedisStoreFromEnv creates a RedisStore instance from environment variables.
-func newRedisStoreFromEnv(ctx context.Context, logger *log.Logger) (Store, error) {
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		return nil, fmt.Errorf("REDIS_ADDR environment variable is required when STORAGE_BACKEND=redis")
-	}
-
-	redisDB := os.Getenv("REDIS_DB")
-	if redisDB == "" {
-		redisDB = "0"
-	}
-	redisDBInt, err := strconv.Atoi(redisDB)
-	if err != nil {
-		return nil, fmt.Errorf("could not convert REDIS_DB to int: %v", err)
-	}
-
-	redisClient := redis.NewClient(&redis.Options{Addr: redisAddr, DB: redisDBInt})
-
-	// Test Redis connection
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("could not connect to redis (%s): %v", redisAddr, err)
-	}
-
-	logger.Printf("INFO: Successfully connected to Redis at %s (DB: %d)", redisAddr, redisDBInt)
-	return NewRedisStore(redisClient), nil
-}

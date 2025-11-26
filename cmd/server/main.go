@@ -7,6 +7,10 @@ import (
 	"os"
 	"os/signal"
 	"time"
+
+	"gocrud/internal/handlers"
+	"gocrud/internal/middleware"
+	"gocrud/internal/store"
 )
 
 func main() {
@@ -15,25 +19,25 @@ func main() {
 
 	logger.Printf("Starting go-crud application")
 
-	store, err := NewStore(ctx, logger)
+	store, err := store.NewStore(ctx, logger)
 	if err != nil {
 		logger.Fatalf("FATAL: failed to initialize store: %v", err)
 	}
 
-	handler := NewHandler(store, logger)
+	handler := handlers.NewHandler(store, logger)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/items", handler.itemsHandler)
-	mux.HandleFunc("/items/", handler.itemHandler)
+	mux.HandleFunc("/items", handler.ItemsHandler)
+	mux.HandleFunc("/items/", handler.ItemHandler)
 
 	// Load API keys for authentication (comma-separated list in API_KEYS env var).
 	keysEnv := os.Getenv("API_KEYS")
 	if keysEnv == "" {
 		logger.Fatal("FATAL: environment variable API_KEYS is required for authentication")
 	}
-	validKeys := parseAPIKeys(keysEnv)
-	authMux := authMiddleware(validKeys, logger)(mux)
-	loggedMux := loggingMiddleware(logger)(authMux)
+	validKeys := middleware.ParseAPIKeys(keysEnv)
+	authMux := middleware.AuthMiddleware(validKeys, logger)(mux)
+	loggedMux := middleware.LoggingMiddleware(logger)(authMux)
 
 	// allow overriding HTTP listen address via HTTP_ADDR env var, default to :9090
 	httpAddr := os.Getenv("HTTP_ADDR")
@@ -68,3 +72,4 @@ func main() {
 
 	logger.Printf("Application shutdown completed successfully")
 }
+

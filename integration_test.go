@@ -12,11 +12,16 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"gocrud/internal/handlers"
+	"gocrud/internal/middleware"
+	"gocrud/internal/models"
+	"gocrud/internal/store"
 )
 
 var (
-	testCtx     = context.Background()
-	testAPIKey  = "test-api-key-123"
+	testCtx    = context.Background()
+	testAPIKey = "test-api-key-123"
 )
 
 // makeAuthenticatedRequest creates an HTTP request with the X-API-Key header set.
@@ -52,29 +57,29 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	}
 
 	logger := newTestLogger()
-	store, err := NewStore(testCtx, logger)
+	storeInstance, err := store.NewStore(testCtx, logger)
 	if err != nil {
 		t.Fatalf("failed to create store with backend %s: %v", backend, err)
 	}
 
 	// Clean up Redis DB if using Redis backend
 	if backend == "redis" {
-		if redisStore, ok := store.(*RedisStore); ok {
-			if err := redisStore.client.FlushDB(testCtx).Err(); err != nil {
+		if redisStore, ok := storeInstance.(*store.RedisStore); ok {
+			if err := redisStore.Client.FlushDB(testCtx).Err(); err != nil {
 				t.Fatalf("failed to flush test redis DB: %v", err)
 			}
 		}
 	}
 
-	handler := NewHandler(store, logger)
+	handler := handlers.NewHandler(storeInstance, logger)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/items", handler.itemsHandler)
-	mux.HandleFunc("/items/", handler.itemHandler)
-	
+	mux.HandleFunc("/items", handler.ItemsHandler)
+	mux.HandleFunc("/items/", handler.ItemHandler)
+
 	// Set up authentication for tests
-	validKeys := parseAPIKeys(testAPIKey)
-	authMux := authMiddleware(validKeys, logger)(mux)
-	srv := httptest.NewServer(loggingMiddleware(logger)(authMux))
+	validKeys := middleware.ParseAPIKeys(testAPIKey)
+	authMux := middleware.AuthMiddleware(validKeys, logger)(mux)
+	srv := httptest.NewServer(middleware.LoggingMiddleware(logger)(authMux))
 
 	cleanup := func() {
 		srv.Close()
@@ -86,8 +91,8 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 		}
 		// Clean up Redis DB if using Redis backend
 		if backend == "redis" {
-			if redisStore, ok := store.(*RedisStore); ok {
-				_ = redisStore.client.FlushDB(testCtx)
+			if redisStore, ok := storeInstance.(*store.RedisStore); ok {
+				_ = redisStore.Client.FlushDB(testCtx)
 			}
 		}
 	}
@@ -113,8 +118,8 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 			type createCase struct {
 				file string
-				req  CreateItemRequest
-				itm  Item
+				req  models.CreateItemRequest
+				itm  models.Item
 			}
 			var cases []createCase
 			for _, fn := range createFiles {
@@ -123,7 +128,7 @@ func TestCRUDIntegration(t *testing.T) {
 				if err != nil {
 					t.Fatalf("reading %s: %v", path, err)
 				}
-				var req CreateItemRequest
+				var req models.CreateItemRequest
 				if err := json.Unmarshal(data, &req); err != nil {
 					t.Fatalf("unmarshal %s: %v", fn, err)
 				}
@@ -148,7 +153,7 @@ func TestCRUDIntegration(t *testing.T) {
 					body, _ := io.ReadAll(resp.Body)
 					t.Fatalf("POST /items (%s) status %d, body: %s", cases[i].file, resp.StatusCode, body)
 				}
-				var out Item
+				var out models.Item
 				if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 					t.Fatalf("decode created (%s): %v", cases[i].file, err)
 				}
@@ -172,7 +177,7 @@ func TestCRUDIntegration(t *testing.T) {
 				if resp.StatusCode != http.StatusOK {
 					t.Fatalf("GET /items/%s status %d", c.itm.ID, resp.StatusCode)
 				}
-				var got Item
+				var got models.Item
 				if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 					t.Fatalf("decode GET %s: %v", c.itm.ID, err)
 				}
@@ -188,7 +193,7 @@ func TestCRUDIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reading update payload: %v", err)
 			}
-			var updReq UpdateItemRequest
+			var updReq models.UpdateItemRequest
 			if err := json.Unmarshal(updData, &updReq); err != nil {
 				t.Fatalf("unmarshal update payload: %v", err)
 			}
@@ -207,7 +212,7 @@ func TestCRUDIntegration(t *testing.T) {
 				body, _ := io.ReadAll(resp.Body)
 				t.Fatalf("PUT /items/%s status %d, body: %s", targetID, resp.StatusCode, body)
 			}
-			var updated Item
+			var updated models.Item
 			if err := json.NewDecoder(resp.Body).Decode(&updated); err != nil {
 				t.Fatalf("decode updated item: %v", err)
 			}
@@ -231,7 +236,7 @@ func TestCRUDIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET after update error: %v", err)
 			}
-			var after Item
+			var after models.Item
 			if err := json.NewDecoder(resp.Body).Decode(&after); err != nil {
 				t.Fatalf("decode after update: %v", err)
 			}
@@ -249,7 +254,7 @@ func TestCRUDIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET /items error: %v", err)
 			}
-			var list []Item
+			var list []models.Item
 			if err := json.NewDecoder(resp.Body).Decode(&list); err != nil {
 				t.Fatalf("decode list: %v", err)
 			}
@@ -267,7 +272,7 @@ func TestCRUDIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET /items?type=%s error: %v", updReq.Type, err)
 			}
-			var filtered []Item
+			var filtered []models.Item
 			if err := json.NewDecoder(resp.Body).Decode(&filtered); err != nil {
 				t.Fatalf("decode filtered list: %v", err)
 			}
@@ -304,7 +309,7 @@ func TestCRUDIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("GET final /items error: %v", err)
 			}
-			var final []Item
+			var final []models.Item
 			if err := json.NewDecoder(resp.Body).Decode(&final); err != nil {
 				t.Fatalf("decode final list: %v", err)
 			}

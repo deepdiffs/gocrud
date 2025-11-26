@@ -1,4 +1,4 @@
-package main
+package errors
 
 import "errors"
 
@@ -7,3 +7,4 @@ var ErrNotFound = errors.New("item not found")
 
 // ErrInvalidInput is returned when the input payload is invalid.
 var ErrInvalidInput = errors.New("invalid input")
+

@@ -1,4 +1,4 @@
-package main
+package models
 
 import (
 	"encoding/json"
@@ -28,3 +28,4 @@ type UpdateItemRequest struct {
 	Tags []string        `json:"tags"`
 	Data json.RawMessage `json:"data"`
 }
+

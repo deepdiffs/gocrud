@@ -11,7 +11,7 @@ RUN go mod download
 # build application
 COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
-    go build -o /gocrud .
+    go build -o /gocrud ./cmd/server
 
 FROM scratch
 COPY --from=builder /gocrud /gocrud

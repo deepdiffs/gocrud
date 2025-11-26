@@ -1,4 +1,4 @@
-package main
+package middleware
 
 import (
 	"bytes"
@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// loggingMiddleware logs full HTTP requests and responses including headers and bodies.
-func loggingMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
+// LoggingMiddleware logs full HTTP requests and responses including headers and bodies.
+func LoggingMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			start := time.Now()
@@ -121,8 +121,8 @@ func logOutgoingResponse(rw *responseWriter, duration time.Duration) string {
 	return buf.String()
 }
 
-// authMiddleware enforces API-key authentication via a custom header.
-func authMiddleware(validKeys map[string]struct{}, logger *log.Logger) func(http.Handler) http.Handler {
+// AuthMiddleware enforces API-key authentication via a custom header.
+func AuthMiddleware(validKeys map[string]struct{}, logger *log.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			apiKey := strings.TrimSpace(r.Header.Get("X-API-Key"))
@@ -143,8 +143,8 @@ func authMiddleware(validKeys map[string]struct{}, logger *log.Logger) func(http
 	}
 }
 
-// parseAPIKeys parses a comma-separated list of API keys into a set.
-func parseAPIKeys(s string) map[string]struct{} {
+// ParseAPIKeys parses a comma-separated list of API keys into a set.
+func ParseAPIKeys(s string) map[string]struct{} {
 	keys := make(map[string]struct{})
 	for _, k := range strings.Split(s, ",") {
 		if v := strings.TrimSpace(k); v != "" {
