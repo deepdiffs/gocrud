@@ -19,16 +19,34 @@ func main() {
 
 	logger.Printf("Starting go-crud application")
 
-	store, err := store.NewStore(ctx, logger)
+	// Create stores for different collections
+	itemsStore, err := store.NewStore(ctx, logger)
 	if err != nil {
-		logger.Fatalf("FATAL: failed to initialize store: %v", err)
+		logger.Fatalf("FATAL: failed to initialize items store: %v", err)
 	}
 
-	handler := handlers.NewHandler(store, logger)
+	workoutsStore, err := store.NewStoreWithCollection(ctx, logger, "workouts")
+	if err != nil {
+		logger.Fatalf("FATAL: failed to initialize workouts store: %v", err)
+	}
+
+	healthStore, err := store.NewStoreWithCollection(ctx, logger, "healthstuff")
+	if err != nil {
+		logger.Fatalf("FATAL: failed to initialize health store: %v", err)
+	}
+
+	// Create handlers for each endpoint
+	itemsHandler := handlers.NewHandler(itemsStore, logger)
+	workoutsHandler := handlers.NewHandler(workoutsStore, logger)
+	healthHandler := handlers.NewHandler(healthStore, logger)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/items", handler.ItemsHandler)
-	mux.HandleFunc("/items/", handler.ItemHandler)
+	mux.HandleFunc("/items", itemsHandler.ItemsHandler)
+	mux.HandleFunc("/items/", itemsHandler.ItemHandler)
+	mux.HandleFunc("/workouts", workoutsHandler.ItemsHandler)
+	mux.HandleFunc("/workouts/", workoutsHandler.ItemHandler)
+	mux.HandleFunc("/health", healthHandler.ItemsHandler)
+	mux.HandleFunc("/health/", healthHandler.ItemHandler)
 
 	// Load API keys for authentication (comma-separated list in API_KEYS env var).
 	keysEnv := os.Getenv("API_KEYS")
@@ -72,4 +90,3 @@ func main() {
 
 	logger.Printf("Application shutdown completed successfully")
 }
-

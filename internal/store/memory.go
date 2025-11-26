@@ -11,11 +11,11 @@ import (
 
 // MemoryStore provides item persistence in memory using maps.
 type MemoryStore struct {
-	mu          sync.RWMutex
-	items       map[string]*models.Item
-	typeIndex   map[string]map[string]bool // type -> set of item IDs
-	tagIndex    map[string]map[string]bool // tag -> set of item IDs
-	logger      *log.Logger
+	mu        sync.RWMutex
+	items     map[string]*models.Item
+	typeIndex map[string]map[string]bool // type -> set of item IDs
+	tagIndex  map[string]map[string]bool // tag -> set of item IDs
+	logger    *log.Logger
 }
 
 // NewMemoryStore creates a new MemoryStore.
@@ -207,4 +207,3 @@ func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilte
 	s.logger.Printf("INFO: Successfully completed ListItems operation - retrieved %d items", len(items))
 	return items, nil
 }
-

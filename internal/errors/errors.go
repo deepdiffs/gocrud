@@ -8,3 +8,5 @@ var ErrNotFound = errors.New("item not found")
 // ErrInvalidInput is returned when the input payload is invalid.
 var ErrInvalidInput = errors.New("invalid input")
 
+// ErrMissingConfig is returned when required configuration is missing.
+var ErrMissingConfig = errors.New("missing required configuration")

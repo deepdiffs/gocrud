@@ -42,7 +42,9 @@ func (h *Handler) ItemsHandler(w http.ResponseWriter, r *http.Request) {
 
 // ItemHandler routes requests with ID: GET, PUT, DELETE.
 func (h *Handler) ItemHandler(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/items/")
+	// Extract ID from path (last segment after the final /)
+	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
+	id := parts[len(parts)-1]
 	if id == "" {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
@@ -101,7 +103,7 @@ func (h *Handler) handleCreateItem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Location", fmt.Sprintf("/items/%s", item.ID))
+	w.Header().Set("Location", fmt.Sprintf("%s/%s", r.URL.Path, item.ID))
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(item)
 }
@@ -228,4 +230,3 @@ func ensureSingleJSON(dec *json.Decoder) error {
 	}
 	return nil
 }
-
