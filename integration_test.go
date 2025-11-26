@@ -41,34 +41,12 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	originalBackend := os.Getenv("STORAGE_BACKEND")
 
 	// Set the backend for this test
-	if backend == "redis" {
-		os.Setenv("STORAGE_BACKEND", "redis")
-		redisAddr := os.Getenv("REDIS_ADDR")
-		if redisAddr == "" {
-			redisAddr = "localhost:6379"
-		}
-		os.Setenv("REDIS_ADDR", redisAddr)
-		os.Setenv("REDIS_DB", "15") // Use DB 15 for testing
-	} else {
-		os.Setenv("STORAGE_BACKEND", "memory")
-		// Clear Redis env vars to ensure memory store is used
-		os.Unsetenv("REDIS_ADDR")
-		os.Unsetenv("REDIS_DB")
-	}
+	os.Setenv("STORAGE_BACKEND", backend)
 
 	logger := newTestLogger()
 	storeInstance, err := store.NewStore(testCtx, logger)
 	if err != nil {
 		t.Fatalf("failed to create store with backend %s: %v", backend, err)
-	}
-
-	// Clean up Redis DB if using Redis backend
-	if backend == "redis" {
-		if redisStore, ok := storeInstance.(*store.RedisStore); ok {
-			if err := redisStore.Client.FlushDB(testCtx).Err(); err != nil {
-				t.Fatalf("failed to flush test redis DB: %v", err)
-			}
-		}
 	}
 
 	handler := handlers.NewHandler(storeInstance, logger)
@@ -89,21 +67,15 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 		} else {
 			os.Setenv("STORAGE_BACKEND", originalBackend)
 		}
-		// Clean up Redis DB if using Redis backend
-		if backend == "redis" {
-			if redisStore, ok := storeInstance.(*store.RedisStore); ok {
-				_ = redisStore.Client.FlushDB(testCtx)
-			}
-		}
 	}
 
 	return srv.URL, cleanup
 }
 
 // TestCRUDIntegration exercises Create, Read, Update, List (with and without type filter), and Delete.
-// Tests both memory and Redis storage backends.
+// Tests memory storage backend.
 func TestCRUDIntegration(t *testing.T) {
-	backends := []string{"memory", "redis"}
+	backends := []string{"memory"}
 
 	for _, backend := range backends {
 		t.Run(backend, func(t *testing.T) {

@@ -1,30 +1,29 @@
  # gocrud
 
- A simple CRUD REST API in Go, backed by Redis.
+ A simple CRUD REST API in Go, backed by in-memory storage.
 
  ## Prerequisites
 
  * Go 1.21+ (for local build)
  * Docker (for container builds)
- * Redis instance running (default at localhost:6379)
 
  ## Local Build & Run
 
 ```bash
 export API_KEYS="<your-api-key>"
-go build -o gocrud main.go
+go build -o gocrud cmd/server/main.go
 ./gocrud
 ```
 
- The server listens on port 9090 by default and connects to Redis at localhost:6379.
+ The server listens on port 9090 by default.
 
  ## Configuration
 
  Environment variables:
 
-* `REDIS_ADDR` – Redis address (default: `localhost:6379`)
 * `HTTP_ADDR` – HTTP listen address (default: `:9090`)
 * `API_KEYS` – comma-separated list of valid API keys (required)
+* `STORAGE_BACKEND` – storage backend (default: `memory`)
 
  ## Docker
 
@@ -41,28 +40,17 @@ go build -o gocrud main.go
    .
  ```
 
-Run the container (connecting to host Redis):
-
- ### Linux
-
-```bash
-docker run --rm --network host \
-  -e API_KEYS="<your-api-key>" \
-  gocrud:latest
-```
-
- ### macOS
+Run the container:
 
 ```bash
 docker run --rm -p 9090:9090 \
   -e API_KEYS="<your-api-key>" \
-  -e REDIS_ADDR=host.docker.internal:6379 \
   gocrud:latest
 ```
 
 ### Docker Compose
 
-Use Docker Compose to run gocrud and Redis together:
+Use Docker Compose to run gocrud:
 
 ```bash
 # Create a .env file containing your API keys (or export API_KEYS in your shell):
@@ -95,8 +83,7 @@ All endpoints require the `X-API-Key` header for authentication.
 
 ## Integration Tests
 
-An end-to-end integration test suite is provided in `integration_test.go`. It starts the HTTP server and exercises all CRUD operations against Redis.
-Make sure a Redis instance is running at `localhost:6379`, then run:
+An end-to-end integration test suite is provided in `integration_test.go`. It starts the HTTP server and exercises all CRUD operations against the in-memory storage backend.
 
 ```bash
 go test -timeout 1m
