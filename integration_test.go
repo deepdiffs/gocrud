@@ -73,7 +73,7 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	
 	// Set up authentication for tests
 	validKeys := parseAPIKeys(testAPIKey)
-	authMux := authMiddleware(validKeys)(mux)
+	authMux := authMiddleware(validKeys, logger)(mux)
 	srv := httptest.NewServer(loggingMiddleware(logger)(authMux))
 
 	cleanup := func() {

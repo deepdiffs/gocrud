@@ -18,7 +18,7 @@ func loggingMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
 
 			// Log incoming request
 			requestLog := logIncomingRequest(r)
-			logger.Printf("INCOMING REQUEST:\n%s", requestLog)
+			logger.Printf("[REQUEST] INCOMING REQUEST:\n%s", requestLog)
 
 			// Wrap response writer to capture response data
 			rw := &responseWriter{
@@ -33,7 +33,7 @@ func loggingMiddleware(logger *log.Logger) func(http.Handler) http.Handler {
 			// Log outgoing response
 			duration := time.Since(start)
 			responseLog := logOutgoingResponse(rw, duration)
-			logger.Printf("OUTGOING RESPONSE:\n%s", responseLog)
+			logger.Printf("[RESPONSE] OUTGOING RESPONSE:\n%s", responseLog)
 		})
 	}
 }
@@ -122,18 +122,39 @@ func logOutgoingResponse(rw *responseWriter, duration time.Duration) string {
 }
 
 // authMiddleware enforces API-key authentication via a custom header.
-func authMiddleware(validKeys map[string]struct{}) func(http.Handler) http.Handler {
+func authMiddleware(validKeys map[string]struct{}, logger *log.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			apiKey := strings.TrimSpace(r.Header.Get("X-API-Key"))
+			// Log all headers for debugging
+			logger.Printf("[AUTH] Request: %s %s", r.Method, r.URL.Path)
+			logger.Printf("[AUTH] All headers:")
+			for name, values := range r.Header {
+				for _, value := range values {
+					logger.Printf("[AUTH]   %s: %s", name, value)
+				}
+			}
+
+			// Extract and log API key
+			apiKeyRaw := r.Header.Get("X-API-Key")
+			logger.Printf("[AUTH] Raw X-API-Key header value: %q", apiKeyRaw)
+			apiKey := strings.TrimSpace(apiKeyRaw)
+			logger.Printf("[AUTH] Trimmed API key: %q (length: %d)", apiKey, len(apiKey))
+
 			if apiKey == "" {
+				logger.Printf("[AUTH] ERROR: API key is empty or missing")
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
+
+			// Log validation attempt
+			logger.Printf("[AUTH] Validating API key (checking against %d valid keys)", len(validKeys))
 			if _, ok := validKeys[apiKey]; !ok {
+				logger.Printf("[AUTH] ERROR: Invalid API key provided")
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
+
+			logger.Printf("[AUTH] Authentication successful")
 			next.ServeHTTP(w, r)
 		})
 	}

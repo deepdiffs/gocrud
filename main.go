@@ -32,7 +32,7 @@ func main() {
 		logger.Fatal("FATAL: environment variable API_KEYS is required for authentication")
 	}
 	validKeys := parseAPIKeys(keysEnv)
-	authMux := authMiddleware(validKeys)(mux)
+	authMux := authMiddleware(validKeys, logger)(mux)
 	loggedMux := loggingMiddleware(logger)(authMux)
 
 	// allow overriding HTTP listen address via HTTP_ADDR env var, default to :9090
