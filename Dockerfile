@@ -1,7 +1,7 @@
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /app
 
 # cache dependencies
