@@ -1,6 +1,6 @@
  # gocrud
 
- A simple CRUD REST API in Go, backed by in-memory storage.
+ A simple CRUD REST API in Go with pluggable storage backends (in-memory or Firestore).
 
  ## Prerequisites
 
@@ -19,11 +19,18 @@ go build -o gocrud cmd/server/main.go
 
  ## Configuration
 
- Environment variables:
+Environment variables:
 
-* `HTTP_ADDR` – HTTP listen address (default: `:9090`)
+* `HTTP_ADDR` – HTTP listen address (default: `:9090`; on Cloud Run the service now respects `PORT` if `HTTP_ADDR` is unset)
 * `API_KEYS` – comma-separated list of valid API keys (required)
-* `STORAGE_BACKEND` – storage backend (default: `memory`)
+* `STORAGE_BACKEND` – storage backend (default: `memory`, set to `firestore` to use Firestore)
+* `FIRESTORE_COLLECTION` – override the default collection name when using the Firestore backend (default: `items`)
+* `GOOGLE_CLOUD_PROJECT` – Firestore project ID; if unset, the server now auto-detects the project from default credentials or the Cloud Run metadata server
+
+When running on Cloud Run with the Firestore backend:
+
+* Deploy with `STORAGE_BACKEND=firestore`. `GOOGLE_CLOUD_PROJECT` is optional because the service now falls back to the Cloud Run metadata server.
+* Ensure the service account has Firestore access (e.g., `roles/datastore.user`) and that the Firestore API is enabled in the project.
 
  ## Docker
 
