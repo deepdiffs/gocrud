@@ -8,8 +8,9 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# build application
-COPY . .
+# build application (copy only source to keep secrets and build artefacts out of the image)
+COPY cmd ./cmd
+COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -o /gocrud ./cmd/server
 

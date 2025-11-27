@@ -1,3 +1,8 @@
-gocrud
+.env
+**/.env
+**/.git
 **/.DS_Store
 **/mockdata/
+gocrud
+server
+.gocache
