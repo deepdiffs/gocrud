@@ -25,7 +25,7 @@ type FirestoreStore struct {
 }
 
 // NewFirestoreStore creates a new FirestoreStore with default collection name.
-// Optional: FIRESTORE_COLLECTION (defaults to "items").
+// Optional: FIRESTORE_COLLECTION (defaults to "items"), FIRESTORE_DATABASE (defaults to "default").
 func NewFirestoreStore(ctx context.Context, logger *log.Logger) (*FirestoreStore, error) {
 	collectionName := os.Getenv("FIRESTORE_COLLECTION")
 	if collectionName == "" {
@@ -41,9 +41,15 @@ func NewFirestoreStoreWithCollection(ctx context.Context, logger *log.Logger, co
 		return nil, err
 	}
 
-	logger.Printf("INFO: Creating Firestore client for project: %s, collection: %s", projectID, collectionName)
+	// Get database name from environment variable, default to "default"
+	databaseID := os.Getenv("FIRESTORE_DATABASE")
+	if databaseID == "" {
+		databaseID = "default"
+	}
 
-	client, err := firestore.NewClient(ctx, projectID)
+	logger.Printf("INFO: Creating Firestore client for project: %s, database: %s, collection: %s", projectID, databaseID, collectionName)
+
+	client, err := firestore.NewClientWithDatabase(ctx, projectID, databaseID)
 	if err != nil {
 		logger.Printf("ERROR: Failed to create Firestore client: %v", err)
 		return nil, err
