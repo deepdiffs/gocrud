@@ -14,7 +14,7 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -o /gocrud ./cmd/server
 
-FROM gcr.io/distroless/static:nonroot
+FROM us-west3-docker.pkg.dev/serverless-runtimes/google-22/run/universal:public-image-next
 COPY --from=builder /gocrud /gocrud
 
 EXPOSE 9090
