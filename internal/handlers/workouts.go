@@ -61,8 +61,19 @@ func (h *Handler) handleCreateWorkouts(w http.ResponseWriter, r *http.Request) {
 	createdCount := 0
 	var errs []errorEntry
 
-	for i, workout := range req.Data.Workouts {
-		itemReq, err := workoutToItemRequest(workout)
+	for i, workoutRaw := range req.Data.Workouts {
+		if !json.Valid(workoutRaw) {
+			errs = append(errs, errorEntry{Index: i, Error: "workout payload is not valid JSON"})
+			continue
+		}
+
+		var meta models.WorkoutMetadata
+		if err := json.Unmarshal(workoutRaw, &meta); err != nil {
+			errs = append(errs, errorEntry{Index: i, Error: fmt.Sprintf("failed to parse workout metadata: %v", err)})
+			continue
+		}
+
+		itemReq, err := workoutToItemRequest(workoutRaw, meta)
 		if err != nil {
 			errMsg := err.Error()
 			errMsg = strings.TrimPrefix(errMsg, "marshal workout: ")
@@ -100,28 +111,28 @@ func (h *Handler) handleCreateWorkouts(w http.ResponseWriter, r *http.Request) {
 }
 
 // workoutToItemRequest converts a workout payload into a CreateItemRequest for storage.
-func workoutToItemRequest(workout models.WorkoutData) (models.CreateItemRequest, error) {
-	data, err := json.Marshal(workout)
-	if err != nil {
-		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: %w", err)
+
+func workoutToItemRequest(workoutRaw json.RawMessage, meta models.WorkoutMetadata) (models.CreateItemRequest, error) {
+	if len(workoutRaw) == 0 {
+		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: empty payload")
 	}
 
-	itemType := strings.TrimSpace(workout.WorkoutType)
+	itemType := strings.TrimSpace(meta.WorkoutType)
 	if itemType == "" {
 		itemType = "workout"
 	}
 
 	tags := []string{"workout"}
-	if workout.WorkoutType != "" {
-		tags = append(tags, "type:"+workout.WorkoutType)
+	if meta.WorkoutType != "" {
+		tags = append(tags, "type:"+meta.WorkoutType)
 	}
-	if workout.WorkoutID != "" {
-		tags = append(tags, "workoutId:"+workout.WorkoutID)
+	if meta.WorkoutID != "" {
+		tags = append(tags, "workoutId:"+meta.WorkoutID)
 	}
 
 	return models.CreateItemRequest{
 		Type: itemType,
 		Tags: tags,
-		Data: data,
+		Data: workoutRaw,
 	}, nil
 }
