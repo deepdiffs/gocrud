@@ -13,7 +13,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -o /gocrud ./cmd/server
 
-FROM scratch
+FROM gcr.io/distroless/static:nonroot
 COPY --from=builder /gocrud /gocrud
 
 EXPOSE 9090
