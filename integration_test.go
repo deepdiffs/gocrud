@@ -48,11 +48,19 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	if err != nil {
 		t.Fatalf("failed to create store with backend %s: %v", backend, err)
 	}
+	workoutsStore, err := store.NewStoreWithCollection(testCtx, logger, "workouts")
+	if err != nil {
+		t.Fatalf("failed to create workouts store with backend %s: %v", backend, err)
+	}
 
-	handler := handlers.NewHandler(storeInstance, logger)
+	itemsHandler := handlers.NewHandler(storeInstance, logger)
+	workoutsHandler := handlers.NewHandler(workoutsStore, logger)
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/items", handler.ItemsHandler)
-	mux.HandleFunc("/items/", handler.ItemHandler)
+	mux.HandleFunc("/items", itemsHandler.ItemsHandler)
+	mux.HandleFunc("/items/", itemsHandler.ItemHandler)
+	mux.HandleFunc("/workouts", workoutsHandler.WorkoutsHandler)
+	mux.HandleFunc("/workouts/", workoutsHandler.ItemHandler)
 
 	// Set up authentication for tests
 	validKeys := middleware.ParseAPIKeys(testAPIKey)
@@ -254,6 +262,52 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 			if filtered[0].ID != targetID {
 				t.Errorf("filtered ID mismatch: want %s, got %s", targetID, filtered[0].ID)
+			}
+
+			// WORKOUTS: create and list
+			workoutPayload := []byte(`{"data":{"workouts":[{"id":"w1","user_id":"user-123","name":"running","start":"2024-01-01T00:00:00Z","end":"2024-01-01T00:30:00Z","duration":30,"activeEnergyBurned":{"qty":210.5,"units":"kcal"},"intensity":{"qty":7,"units":"rpe"}}]}}`)
+			req, err = makeAuthenticatedRequest(http.MethodPost, testServerURL+"/workouts", bytes.NewReader(workoutPayload))
+			if err != nil {
+				t.Fatalf("creating POST /workouts request: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("POST /workouts error: %v", err)
+			}
+			if resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("POST /workouts status %d, body: %s", resp.StatusCode, body)
+			}
+			var workoutResp map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&workoutResp); err != nil {
+				t.Fatalf("decode workouts response: %v", err)
+			}
+			resp.Body.Close()
+
+			createdVal, ok := workoutResp["created"].(float64)
+			if !ok || int(createdVal) != 1 {
+				t.Fatalf("unexpected created count in workouts response: %v", workoutResp)
+			}
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/workouts", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for workouts list: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /workouts error: %v", err)
+			}
+			var workouts []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&workouts); err != nil {
+				t.Fatalf("decode workouts list: %v", err)
+			}
+			resp.Body.Close()
+			if len(workouts) != 1 {
+				t.Fatalf("expected 1 workout item, got %d", len(workouts))
+			}
+			if workouts[0].Type != "running" {
+				t.Errorf("unexpected workout type: %s", workouts[0].Type)
 			}
 
 			// DELETE all

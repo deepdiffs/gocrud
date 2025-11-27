@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,28 +76,12 @@ func (h *Handler) handleCreateItem(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if strings.TrimSpace(req.Type) == "" || len(req.Data) == 0 {
-		http.Error(w, "type and data are required", http.StatusBadRequest)
-		return
-	}
-	// validate JSON data
-	var js interface{}
-	if err := json.Unmarshal(req.Data, &js); err != nil {
-		http.Error(w, fmt.Sprintf("invalid JSON data: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	now := time.Now().UTC()
-	item := &models.Item{
-		ID:           uuid.NewString(),
-		Type:         req.Type,
-		Tags:         req.Tags,
-		Data:         req.Data,
-		CreatedAt:    now,
-		LastModified: now,
-	}
-
-	if err := h.store.SaveItem(r.Context(), item); err != nil {
+	item, status, err := h.buildAndSaveItem(r.Context(), req)
+	if err != nil {
+		if status == http.StatusBadRequest {
+			http.Error(w, err.Error(), status)
+			return
+		}
 		h.logger.Printf("error saving item: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -229,4 +214,33 @@ func ensureSingleJSON(dec *json.Decoder) error {
 		return fmt.Errorf("request body must only contain a single JSON object")
 	}
 	return nil
+}
+
+// buildAndSaveItem validates a create request, stamps metadata, and persists it.
+func (h *Handler) buildAndSaveItem(ctx context.Context, req models.CreateItemRequest) (*models.Item, int, error) {
+	if strings.TrimSpace(req.Type) == "" || len(req.Data) == 0 {
+		return nil, http.StatusBadRequest, fmt.Errorf("type and data are required")
+	}
+
+	// validate JSON data
+	var js interface{}
+	if err := json.Unmarshal(req.Data, &js); err != nil {
+		return nil, http.StatusBadRequest, fmt.Errorf("invalid JSON data: %w", err)
+	}
+
+	now := time.Now().UTC()
+	item := &models.Item{
+		ID:           uuid.NewString(),
+		Type:         req.Type,
+		Tags:         req.Tags,
+		Data:         req.Data,
+		CreatedAt:    now,
+		LastModified: now,
+	}
+
+	if err := h.store.SaveItem(ctx, item); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	return item, 0, nil
 }

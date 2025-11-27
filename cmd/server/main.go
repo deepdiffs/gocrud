@@ -62,7 +62,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", itemsHandler.ItemsHandler)
 	mux.HandleFunc("/items/", itemsHandler.ItemHandler)
-	mux.HandleFunc("/workouts", workoutsHandler.ItemsHandler)
+	mux.HandleFunc("/workouts", workoutsHandler.WorkoutsHandler)
 	mux.HandleFunc("/workouts/", workoutsHandler.ItemHandler)
 	mux.HandleFunc("/health", healthHandler.ItemsHandler)
 	mux.HandleFunc("/health/", healthHandler.ItemHandler)
