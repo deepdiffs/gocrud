@@ -21,7 +21,6 @@ type WorkoutRequest struct {
 // items while leaving the full payload untouched.
 type WorkoutMetadata struct {
 	WorkoutID   string `json:"id"`
-	UserID      string `json:"user_id"`
 	WorkoutType string `json:"name"`
 }
 
@@ -30,15 +29,24 @@ type WorkoutMetadata struct {
 // from the request to preserve all fields.
 type WorkoutData struct {
 	WorkoutID       string                 `json:"id"`
-	UserID          string                 `json:"user_id"`
 	WorkoutType     string                 `json:"name"`
 	StartTime       string                 `json:"start"`
 	EndTime         string                 `json:"end"`
 	DurationMinutes float64                `json:"duration"`
-	Temperature     QuantityData           `json:"temperature,omitempty"`
 	ActiveEnergy    QuantityData           `json:"activeEnergyBurned"`
-	Humidity        QuantityData           `json:"humidity,omitempty"`
 	Intensity       QuantityData           `json:"intensity"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
 	Data            map[string]interface{} `json:"data,omitempty"`
+}
+
+// WorkoutSummary represents a simplified workout document with only essential fields.
+// This is stored in Firestore instead of the full raw payload to avoid document size limits.
+type WorkoutSummary struct {
+	WorkoutID       string       `json:"id"`
+	WorkoutType     string       `json:"name"`
+	StartTime       string       `json:"start,omitempty"`
+	EndTime         string       `json:"end,omitempty"`
+	DurationMinutes float64      `json:"duration,omitempty"`
+	Calories        QuantityData `json:"activeEnergyBurned,omitempty"`
+	Intensity       QuantityData `json:"intensity,omitempty"`
 }

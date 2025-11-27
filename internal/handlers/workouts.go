@@ -35,7 +35,7 @@ func (h *Handler) handleCreateWorkouts(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	// Log the entire request payload
-	h.logger.Printf("Request payload: %s", string(bodyBytes))
+	h.logger.Println("Request payload: %s", string(bodyBytes))
 
 	var req models.WorkoutRequest
 	dec := json.NewDecoder(bytes.NewReader(bodyBytes))
@@ -111,10 +111,34 @@ func (h *Handler) handleCreateWorkouts(w http.ResponseWriter, r *http.Request) {
 }
 
 // workoutToItemRequest converts a workout payload into a CreateItemRequest for storage.
-
+// It extracts only essential fields to create a simplified WorkoutSummary, avoiding
+// Firestore document size limits by not storing the entire raw payload.
 func workoutToItemRequest(workoutRaw json.RawMessage, meta models.WorkoutMetadata) (models.CreateItemRequest, error) {
 	if len(workoutRaw) == 0 {
 		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: empty payload")
+	}
+
+	// Parse the workout data to extract essential fields
+	var workoutData models.WorkoutData
+	if err := json.Unmarshal(workoutRaw, &workoutData); err != nil {
+		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: failed to parse workout data: %v", err)
+	}
+
+	// Create a simplified summary with only essential fields
+	summary := models.WorkoutSummary{
+		WorkoutID:       workoutData.WorkoutID,
+		WorkoutType:     workoutData.WorkoutType,
+		StartTime:       workoutData.StartTime,
+		EndTime:         workoutData.EndTime,
+		DurationMinutes: workoutData.DurationMinutes,
+		Calories:        workoutData.ActiveEnergy,
+		Intensity:       workoutData.Intensity,
+	}
+
+	// Marshal the summary to JSON for storage
+	summaryJSON, err := json.Marshal(summary)
+	if err != nil {
+		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: failed to marshal summary: %v", err)
 	}
 
 	itemType := strings.TrimSpace(meta.WorkoutType)
@@ -133,6 +157,6 @@ func workoutToItemRequest(workoutRaw json.RawMessage, meta models.WorkoutMetadat
 	return models.CreateItemRequest{
 		Type: itemType,
 		Tags: tags,
-		Data: workoutRaw,
+		Data: summaryJSON,
 	}, nil
 }
