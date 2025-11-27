@@ -35,7 +35,7 @@ func (h *Handler) handleCreateWorkouts(w http.ResponseWriter, r *http.Request) {
 	r.Body.Close()
 
 	// Log the entire request payload
-	h.logger.Println("Request payload: %s", string(bodyBytes))
+	h.logger.Printf("Request payload: %s", string(bodyBytes))
 
 	var req models.WorkoutRequest
 	dec := json.NewDecoder(bytes.NewReader(bodyBytes))

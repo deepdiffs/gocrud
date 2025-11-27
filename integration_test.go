@@ -52,15 +52,22 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	if err != nil {
 		t.Fatalf("failed to create workouts store with backend %s: %v", backend, err)
 	}
+	healthStore, err := store.NewStoreWithCollection(testCtx, logger, "health")
+	if err != nil {
+		t.Fatalf("failed to create health store with backend %s: %v", backend, err)
+	}
 
 	itemsHandler := handlers.NewHandler(storeInstance, logger)
 	workoutsHandler := handlers.NewHandler(workoutsStore, logger)
+	healthHandler := handlers.NewHandler(healthStore, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", itemsHandler.ItemsHandler)
 	mux.HandleFunc("/items/", itemsHandler.ItemHandler)
 	mux.HandleFunc("/workouts", workoutsHandler.WorkoutsHandler)
 	mux.HandleFunc("/workouts/", workoutsHandler.ItemHandler)
+	mux.HandleFunc("/health", healthHandler.HealthHandler)
+	mux.HandleFunc("/health/", healthHandler.ItemHandler)
 
 	// Set up authentication for tests
 	validKeys := middleware.ParseAPIKeys(testAPIKey)
@@ -308,6 +315,74 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 			if workouts[0].Type != "running" {
 				t.Errorf("unexpected workout type: %s", workouts[0].Type)
+			}
+
+			// HEALTH: aggregate and list
+			healthPayload := []byte(`{"data":{"metrics":[{"name":"heart_rate_variability","units":"ms","data":[{"qty":50,"date":"2024-02-01T00:00:00Z"},{"qty":100,"date":"2024-02-01T01:00:00Z"}]},{"name":"sleep_analysis","units":"hr","data":[{"sleepStart":"2024-02-01T00:00:00Z","sleepEnd":"2024-02-01T08:00:00Z","rem":2.0,"deep":1.5,"core":4.0,"awake":0.5,"totalSleep":8.0,"inBed":8.5,"inBedStart":"2024-02-01T00:00:00Z","inBedEnd":"2024-02-01T08:30:00Z","date":"2024-02-01","source":"watch"}]}]}}`)
+			req, err = makeAuthenticatedRequest(http.MethodPost, testServerURL+"/health", bytes.NewReader(healthPayload))
+			if err != nil {
+				t.Fatalf("creating POST /health request: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("POST /health error: %v", err)
+			}
+			if resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("POST /health status %d, body: %s", resp.StatusCode, body)
+			}
+			var healthResp map[string]interface{}
+			if err := json.NewDecoder(resp.Body).Decode(&healthResp); err != nil {
+				t.Fatalf("decode health response: %v", err)
+			}
+			resp.Body.Close()
+			if created, ok := healthResp["created"].(float64); !ok || int(created) != 2 {
+				t.Fatalf("unexpected health created count: %v", healthResp)
+			}
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/health", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for health list: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /health error: %v", err)
+			}
+			var healthItems []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&healthItems); err != nil {
+				t.Fatalf("decode health list: %v", err)
+			}
+			resp.Body.Close()
+			if len(healthItems) != 2 {
+				t.Fatalf("expected 2 health items, got %d", len(healthItems))
+			}
+
+			var hasHRV, hasSleep bool
+			for _, itm := range healthItems {
+				switch itm.Type {
+				case "heart_rate_variability":
+					hasHRV = true
+					var summary models.HealthMetricSummary
+					if err := json.Unmarshal(itm.Data, &summary); err != nil {
+						t.Fatalf("unmarshal hrv summary: %v", err)
+					}
+					if summary.Count != 2 || summary.Total != 150 || summary.Average != 75 {
+						t.Fatalf("unexpected hrv summary: %+v", summary)
+					}
+				case "sleep_analysis":
+					hasSleep = true
+					var sleep models.SleepSummary
+					if err := json.Unmarshal(itm.Data, &sleep); err != nil {
+						t.Fatalf("unmarshal sleep summary: %v", err)
+					}
+					if sleep.DurationHours < 7.9 || sleep.DurationHours > 8.1 {
+						t.Fatalf("unexpected sleep duration: %+v", sleep)
+					}
+				}
+			}
+			if !hasHRV || !hasSleep {
+				t.Fatalf("health items missing expected types: hrv=%t sleep=%t", hasHRV, hasSleep)
 			}
 
 			// DELETE all
