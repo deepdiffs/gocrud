@@ -2,13 +2,18 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"gocrud/internal/errors"
 	"gocrud/internal/models"
 
+	"cloud.google.com/go/compute/metadata"
 	"cloud.google.com/go/firestore"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/iterator"
 )
 
@@ -20,7 +25,6 @@ type FirestoreStore struct {
 }
 
 // NewFirestoreStore creates a new FirestoreStore with default collection name.
-// Requires GOOGLE_CLOUD_PROJECT environment variable.
 // Optional: FIRESTORE_COLLECTION (defaults to "items").
 func NewFirestoreStore(ctx context.Context, logger *log.Logger) (*FirestoreStore, error) {
 	collectionName := os.Getenv("FIRESTORE_COLLECTION")
@@ -31,11 +35,10 @@ func NewFirestoreStore(ctx context.Context, logger *log.Logger) (*FirestoreStore
 }
 
 // NewFirestoreStoreWithCollection creates a new FirestoreStore with a specific collection name.
-// Requires GOOGLE_CLOUD_PROJECT environment variable.
 func NewFirestoreStoreWithCollection(ctx context.Context, logger *log.Logger, collectionName string) (*FirestoreStore, error) {
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	if projectID == "" {
-		return nil, errors.ErrMissingConfig
+	projectID, err := resolveProjectID(ctx, logger)
+	if err != nil {
+		return nil, err
 	}
 
 	logger.Printf("INFO: Creating Firestore client for project: %s, collection: %s", projectID, collectionName)
@@ -169,6 +172,46 @@ func (s *FirestoreStore) ListItems(ctx context.Context, typeFilter string, tagFi
 
 	s.logger.Printf("INFO: Successfully completed ListItems operation - retrieved %d items", len(items))
 	return items, nil
+}
+
+// resolveProjectID returns the project ID using environment variables, default
+// credentials, or the metadata server. This mirrors how GCP services expose the
+// project ID on Cloud Run without requiring GOOGLE_CLOUD_PROJECT to be set.
+func resolveProjectID(ctx context.Context, logger *log.Logger) (string, error) {
+	if logger != nil {
+		logger.Printf("INFO: Resolving project ID from environment/credentials/metadata")
+	}
+	for _, key := range []string{"GOOGLE_CLOUD_PROJECT", "GCLOUD_PROJECT", "GCP_PROJECT", "PROJECT_ID"} {
+		if v := os.Getenv(key); v != "" {
+			if logger != nil {
+				logger.Printf("INFO: Using project ID from %s", key)
+			}
+			return v, nil
+		}
+	}
+
+	creds, err := google.FindDefaultCredentials(ctx)
+	if err == nil && creds.ProjectID != "" {
+		if logger != nil {
+			logger.Printf("INFO: Using project ID from default credentials")
+		}
+		return creds.ProjectID, nil
+	}
+	if err != nil && logger != nil {
+		logger.Printf("WARN: Default credentials lookup failed: %v", err)
+	}
+
+	mdClient := metadata.NewClient(&http.Client{Timeout: 2 * time.Second})
+	if projectID, err := mdClient.ProjectID(); err == nil && projectID != "" {
+		if logger != nil {
+			logger.Printf("INFO: Using project ID from metadata service")
+		}
+		return projectID, nil
+	} else if logger != nil {
+		logger.Printf("WARN: Metadata service did not return a project ID; err=%v", err)
+	}
+
+	return "", fmt.Errorf("%w: set GOOGLE_CLOUD_PROJECT or allow metadata access to discover project ID", errors.ErrMissingConfig)
 }
 
 // containsAllTags checks if an item contains all the specified tags.

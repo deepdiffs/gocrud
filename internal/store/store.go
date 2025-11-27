@@ -25,6 +25,7 @@ func NewStore(ctx context.Context, logger *log.Logger) (Store, error) {
 	if backend == "" {
 		backend = "memory" // Default to in-memory store
 	}
+	logger.Printf("Store initialization requested with backend=%q (defaulted if empty)", backend)
 
 	switch backend {
 	case "memory":
@@ -34,6 +35,7 @@ func NewStore(ctx context.Context, logger *log.Logger) (Store, error) {
 		return NewFirestoreStore(ctx, logger)
 
 	default:
+		logger.Printf("ERROR: unsupported STORAGE_BACKEND value %q", backend)
 		return nil, fmt.Errorf("unsupported STORAGE_BACKEND: %s (supported: memory, firestore)", backend)
 	}
 }
@@ -46,6 +48,7 @@ func NewStoreWithCollection(ctx context.Context, logger *log.Logger, collectionN
 	if backend == "" {
 		backend = "memory" // Default to in-memory store
 	}
+	logger.Printf("Store initialization with collection=%q using backend=%q", collectionName, backend)
 
 	switch backend {
 	case "memory":
@@ -56,6 +59,7 @@ func NewStoreWithCollection(ctx context.Context, logger *log.Logger, collectionN
 		return NewFirestoreStoreWithCollection(ctx, logger, collectionName)
 
 	default:
+		logger.Printf("ERROR: unsupported STORAGE_BACKEND value %q", backend)
 		return nil, fmt.Errorf("unsupported STORAGE_BACKEND: %s (supported: memory, firestore)", backend)
 	}
 }

@@ -19,6 +19,25 @@ func main() {
 
 	logger.Printf("Starting go-crud application")
 
+	backend := os.Getenv("STORAGE_BACKEND")
+	if backend == "" {
+		backend = "memory"
+	}
+	firestoreCollection := os.Getenv("FIRESTORE_COLLECTION")
+	if firestoreCollection == "" {
+		firestoreCollection = "items"
+	}
+	logger.Printf(
+		"Config snapshot -> STORAGE_BACKEND=%q FIRESTORE_COLLECTION=%q HTTP_ADDR=%q PORT=%q GOOGLE_CLOUD_PROJECT=%q GCLOUD_PROJECT=%q API_KEYS_present=%t",
+		backend,
+		firestoreCollection,
+		os.Getenv("HTTP_ADDR"),
+		os.Getenv("PORT"),
+		os.Getenv("GOOGLE_CLOUD_PROJECT"),
+		os.Getenv("GCLOUD_PROJECT"),
+		os.Getenv("API_KEYS") != "",
+	)
+
 	// Create stores for different collections
 	itemsStore, err := store.NewStore(ctx, logger)
 	if err != nil {
@@ -54,14 +73,21 @@ func main() {
 		logger.Fatal("FATAL: environment variable API_KEYS is required for authentication")
 	}
 	validKeys := middleware.ParseAPIKeys(keysEnv)
+	logger.Printf("Authentication configured with %d API keys", len(validKeys))
 	authMux := middleware.AuthMiddleware(validKeys, logger)(mux)
 	loggedMux := middleware.LoggingMiddleware(logger)(authMux)
 
-	// allow overriding HTTP listen address via HTTP_ADDR env var, default to :9090
+	// allow overriding HTTP listen address via HTTP_ADDR env var. On Cloud Run, PORT
+	// is provided; fall back to :9090 locally.
 	httpAddr := os.Getenv("HTTP_ADDR")
 	if httpAddr == "" {
-		httpAddr = ":9090"
+		if port := os.Getenv("PORT"); port != "" {
+			httpAddr = ":" + port
+		} else {
+			httpAddr = ":9090"
+		}
 	}
+	logger.Printf("HTTP server address resolved to %s", httpAddr)
 	server := &http.Server{
 		Addr:         httpAddr,
 		Handler:      loggedMux,
