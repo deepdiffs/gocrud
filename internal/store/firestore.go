@@ -24,6 +24,14 @@ type FirestoreStore struct {
 	logger         *log.Logger
 }
 
+// Firestore field names mirror the exported struct field names because we rely on
+// the default Firestore struct mapping (no firestore tags set).
+const (
+	firestoreFieldType      = "Type"
+	firestoreFieldTags      = "Tags"
+	firestoreFieldTimestamp = "Timestamp"
+)
+
 // NewFirestoreStore creates a new FirestoreStore with default collection name.
 // Optional: FIRESTORE_COLLECTION (defaults to "items"), FIRESTORE_DATABASE (defaults to "default").
 func NewFirestoreStore(ctx context.Context, logger *log.Logger) (*FirestoreStore, error) {
@@ -132,22 +140,22 @@ func (s *FirestoreStore) ListItems(ctx context.Context, typeFilter string, tagFi
 
 	// Apply type filter
 	if typeFilter != "" {
-		query = query.Where("type", "==", typeFilter)
+		query = query.Where(firestoreFieldType, "==", typeFilter)
 		s.logger.Printf("INFO: Applied type filter: %s", typeFilter)
 	}
 
 	// Apply tag filters (all tags must be present - intersection)
 	for _, tag := range tagFilters {
-		query = query.Where("tags", "array-contains", tag)
+		query = query.Where(firestoreFieldTags, "array-contains", tag)
 		s.logger.Printf("INFO: Applied tag filter: %s", tag)
 	}
 
 	if startTime != nil {
-		query = query.Where("timestamp", ">=", startTime.UTC())
+		query = query.Where(firestoreFieldTimestamp, ">=", startTime.UTC())
 		s.logger.Printf("INFO: Applied startTime filter: %s", startTime.UTC())
 	}
 	if endTime != nil {
-		query = query.Where("timestamp", "<=", endTime.UTC())
+		query = query.Where(firestoreFieldTimestamp, "<=", endTime.UTC())
 		s.logger.Printf("INFO: Applied endTime filter: %s", endTime.UTC())
 	}
 
