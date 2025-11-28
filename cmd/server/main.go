@@ -53,6 +53,7 @@ func main() {
 	itemsHandler := handlers.NewHandler(itemsStore, logger)
 	workoutsHandler := handlers.NewHandler(sharedHealthStore, logger)
 	healthHandler := handlers.NewHandler(sharedHealthStore, logger)
+	journalsHandler := handlers.NewHandler(itemsStore, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", itemsHandler.ItemsHandler)
@@ -61,6 +62,7 @@ func main() {
 	mux.HandleFunc("/workouts/", workoutsHandler.ItemHandler)
 	mux.HandleFunc("/health", healthHandler.HealthHandler)
 	mux.HandleFunc("/health/", healthHandler.ItemHandler)
+	mux.HandleFunc("/journals", journalsHandler.JournalsHandler)
 
 	// Load API keys for authentication (comma-separated list in API_KEYS env var).
 	keysEnv := os.Getenv("API_KEYS")
