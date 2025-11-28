@@ -148,7 +148,7 @@ func (h *Handler) handleUpdateItem(w http.ResponseWriter, r *http.Request, id st
 	item.Name = req.Name
 	item.Timestamp = req.Timestamp.UTC()
 	item.Tags = req.Tags
-	item.Data = string(req.Data)
+	item.Data = js
 	item.LastModified = time.Now().UTC()
 
 	if err := h.store.SaveItem(r.Context(), item); err != nil {
@@ -242,7 +242,7 @@ func (h *Handler) buildAndSaveItem(ctx context.Context, req models.CreateItemReq
 		Name:         req.Name,
 		Timestamp:    req.Timestamp.UTC(),
 		Tags:         req.Tags,
-		Data:         string(req.Data),
+		Data:         js,
 		CreatedAt:    now,
 		LastModified: now,
 	}

@@ -182,10 +182,7 @@ func aggregateHealthMetric(metric models.HealthMetricPayload) (models.CreateItem
 		return models.CreateItemRequest{}, fmt.Errorf("marshal metric %s: %v", metric.Name, err)
 	}
 
-	tags := []string{"health", "metric:" + metric.Name}
-	if metric.Units != "" {
-		tags = append(tags, "units:"+metric.Units)
-	}
+	tags := []string{"health"}
 
 	ts := end
 	if ts.IsZero() {
@@ -247,10 +244,7 @@ func buildSleepItems(metric models.HealthMetricPayload) ([]models.CreateItemRequ
 			return nil, fmt.Errorf("marshal sleep summary: %v", err)
 		}
 
-		tags := []string{"health", "metric:sleep_analysis"}
-		if s.Date != "" {
-			tags = append(tags, "date:"+s.Date)
-		}
+		tags := []string{"health"}
 
 		ts := start
 		if ts.IsZero() {

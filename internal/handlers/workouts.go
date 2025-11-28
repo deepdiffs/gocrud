@@ -156,10 +156,7 @@ func workoutToItemRequest(workoutRaw json.RawMessage, meta models.WorkoutMetadat
 		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: failed to marshal summary: %v", err)
 	}
 
-	tags := []string{"workout", "name:" + normalizedName}
-	if meta.WorkoutID != "" {
-		tags = append(tags, "workoutId:"+meta.WorkoutID)
-	}
+	tags := []string{"workout"}
 
 	dedupID := meta.WorkoutID
 	if dedupID == "" {

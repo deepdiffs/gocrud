@@ -222,12 +222,12 @@ func TestCRUDIntegration(t *testing.T) {
 			if !updated.Timestamp.Equal(updReq.Timestamp) {
 				t.Errorf("update Timestamp mismatch: want %s, got %s", updReq.Timestamp, updated.Timestamp)
 			}
-			var updatedData map[string]interface{}
-			if err := json.Unmarshal([]byte(updated.Data), &updatedData); err != nil {
-				t.Fatalf("unmarshal updated data: %v", err)
+			updatedData, ok := updated.Data.(map[string]interface{})
+			if !ok {
+				t.Fatalf("unexpected updated data type %T", updated.Data)
 			}
 			if price, ok := updatedData["price"].(float64); !ok || price != 899.99 {
-				t.Errorf("updated data not applied: %s", updated.Data)
+				t.Errorf("updated data not applied: %#v", updated.Data)
 			}
 
 			// VERIFY update via GET
@@ -470,7 +470,11 @@ func TestCRUDIntegration(t *testing.T) {
 				t.Fatalf("health items missing hrv entry; names=%v", names)
 			}
 			var summary models.HealthMetricSummary
-			if err := json.Unmarshal([]byte(hrvItem.Data), &summary); err != nil {
+			summaryBytes, err := json.Marshal(hrvItem.Data)
+			if err != nil {
+				t.Fatalf("marshal hrv data: %v", err)
+			}
+			if err := json.Unmarshal(summaryBytes, &summary); err != nil {
 				t.Fatalf("unmarshal hrv summary: %v", err)
 			}
 			if summary.Count != 2 || summary.Total != 150 || summary.Average != 75 {
@@ -482,7 +486,11 @@ func TestCRUDIntegration(t *testing.T) {
 				t.Fatalf("health items missing sleep entry; names=%v", names)
 			}
 			var sleep models.SleepSummary
-			if err := json.Unmarshal([]byte(sleepItem.Data), &sleep); err != nil {
+			sleepBytes, err := json.Marshal(sleepItem.Data)
+			if err != nil {
+				t.Fatalf("marshal sleep data: %v", err)
+			}
+			if err := json.Unmarshal(sleepBytes, &sleep); err != nil {
 				t.Fatalf("unmarshal sleep summary: %v", err)
 			}
 			if sleep.DurationHours < 7.9 || sleep.DurationHours > 8.1 {

@@ -12,7 +12,7 @@ type Item struct {
 	Name         string    `json:"name"`
 	Timestamp    time.Time `json:"timestamp"`
 	Tags         []string  `json:"tags"`
-	Data         string    `json:"data"`
+	Data         interface{} `json:"data"`
 	CreatedAt    time.Time `json:"createdAt"`
 	LastModified time.Time `json:"lastModified"`
 }
