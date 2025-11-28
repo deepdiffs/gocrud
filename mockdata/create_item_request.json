@@ -1,5 +1,7 @@
 {
   "type": "product",
+  "name": "iphone-15-pro",
+  "timestamp": "2024-01-01T00:00:00Z",
   "tags": ["electronics", "smartphone", "mobile"],
   "data": {
     "name": "iPhone 15 Pro",
@@ -15,4 +17,4 @@
     "in_stock": true,
     "category": "smartphones"
   }
-} 
+}

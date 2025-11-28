@@ -1,5 +1,7 @@
 {
   "type": "product",
+  "name": "iphone-15-pro",
+  "timestamp": "2024-01-02T00:00:00Z",
   "tags": ["electronics", "smartphone", "mobile", "sale"],
   "data": {
     "name": "iPhone 15 Pro",
@@ -16,4 +18,4 @@
     "category": "smartphones",
     "discount": "10%"
   }
-} 
+}

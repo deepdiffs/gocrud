@@ -122,8 +122,8 @@ func (h *Handler) handleUpdateItem(w http.ResponseWriter, r *http.Request, id st
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if strings.TrimSpace(req.Type) == "" || len(req.Data) == 0 {
-		http.Error(w, "type and data are required", http.StatusBadRequest)
+	if strings.TrimSpace(req.Type) == "" || strings.TrimSpace(req.Name) == "" || req.Timestamp.IsZero() || len(req.Data) == 0 {
+		http.Error(w, "type, name, timestamp, and data are required", http.StatusBadRequest)
 		return
 	}
 	// validate JSON data
@@ -145,8 +145,10 @@ func (h *Handler) handleUpdateItem(w http.ResponseWriter, r *http.Request, id st
 	}
 
 	item.Type = req.Type
+	item.Name = req.Name
+	item.Timestamp = req.Timestamp.UTC()
 	item.Tags = req.Tags
-	item.Data = req.Data
+	item.Data = string(req.Data)
 	item.LastModified = time.Now().UTC()
 
 	if err := h.store.SaveItem(r.Context(), item); err != nil {
@@ -218,8 +220,8 @@ func ensureSingleJSON(dec *json.Decoder) error {
 
 // buildAndSaveItem validates a create request, stamps metadata, and persists it.
 func (h *Handler) buildAndSaveItem(ctx context.Context, req models.CreateItemRequest) (*models.Item, int, error) {
-	if strings.TrimSpace(req.Type) == "" || len(req.Data) == 0 {
-		return nil, http.StatusBadRequest, fmt.Errorf("type and data are required")
+	if strings.TrimSpace(req.Type) == "" || strings.TrimSpace(req.Name) == "" || req.Timestamp.IsZero() || len(req.Data) == 0 {
+		return nil, http.StatusBadRequest, fmt.Errorf("type, name, timestamp, and data are required")
 	}
 
 	// validate JSON data
@@ -228,14 +230,27 @@ func (h *Handler) buildAndSaveItem(ctx context.Context, req models.CreateItemReq
 		return nil, http.StatusBadRequest, fmt.Errorf("invalid JSON data: %w", err)
 	}
 
+	id := strings.TrimSpace(req.ID)
+	if id == "" {
+		id = uuid.NewString()
+	}
+
 	now := time.Now().UTC()
 	item := &models.Item{
-		ID:           uuid.NewString(),
+		ID:           id,
 		Type:         req.Type,
+		Name:         req.Name,
+		Timestamp:    req.Timestamp.UTC(),
 		Tags:         req.Tags,
-		Data:         req.Data,
+		Data:         string(req.Data),
 		CreatedAt:    now,
 		LastModified: now,
+	}
+
+	if existing, err := h.store.GetItem(ctx, id); err == nil && existing != nil {
+		item.CreatedAt = existing.CreatedAt
+	} else if err != nil && err != errors.ErrNotFound {
+		return nil, http.StatusInternalServerError, err
 	}
 
 	if err := h.store.SaveItem(ctx, item); err != nil {

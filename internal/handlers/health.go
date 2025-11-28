@@ -99,15 +99,16 @@ func (h *Handler) handleCreateHealth(w http.ResponseWriter, r *http.Request) {
 
 // healthMetricToItems converts a HealthAutoExport metric into one or more item requests.
 func healthMetricToItems(metric models.HealthMetricPayload) ([]models.CreateItemRequest, error) {
-	name := strings.TrimSpace(metric.Name)
+	name := strings.TrimSpace(strings.ToLower(metric.Name))
 	if name == "" {
 		return nil, fmt.Errorf("metric name is required")
 	}
+	metric.Name = name
 	if len(metric.Data) == 0 {
 		return nil, fmt.Errorf("metric %s has no data", name)
 	}
 
-	if strings.EqualFold(name, "sleep_analysis") {
+	if name == models.HealthMetricSleepAnalysis {
 		return buildSleepItems(metric)
 	}
 
@@ -186,10 +187,21 @@ func aggregateHealthMetric(metric models.HealthMetricPayload) (models.CreateItem
 		tags = append(tags, "units:"+metric.Units)
 	}
 
+	ts := end
+	if ts.IsZero() {
+		ts = start
+	}
+	if ts.IsZero() {
+		return models.CreateItemRequest{}, fmt.Errorf("metric %s missing timestamp", metric.Name)
+	}
+
 	return models.CreateItemRequest{
-		Type: metric.Name,
-		Tags: tags,
-		Data: data,
+		ID:        deterministicID(models.ItemTypeHealthData, metric.Name, ts.UTC().Format(time.RFC3339Nano)),
+		Type:      models.ItemTypeHealthData,
+		Name:      metric.Name,
+		Timestamp: ts.UTC(),
+		Tags:      tags,
+		Data:      data,
 	}, nil
 }
 
@@ -240,10 +252,21 @@ func buildSleepItems(metric models.HealthMetricPayload) ([]models.CreateItemRequ
 			tags = append(tags, "date:"+s.Date)
 		}
 
+		ts := start
+		if ts.IsZero() {
+			ts = end
+		}
+		if ts.IsZero() {
+			return nil, fmt.Errorf("sleep entry missing timestamp")
+		}
+
 		items = append(items, models.CreateItemRequest{
-			Type: "sleep_analysis",
-			Tags: tags,
-			Data: data,
+			ID:        deterministicID(models.ItemTypeHealthData, models.HealthMetricSleepAnalysis, ts.UTC().Format(time.RFC3339Nano)),
+			Type:      models.ItemTypeHealthData,
+			Name:      models.HealthMetricSleepAnalysis,
+			Timestamp: ts.UTC(),
+			Tags:      tags,
+			Data:      data,
 		})
 	}
 

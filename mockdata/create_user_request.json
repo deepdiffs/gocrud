@@ -1,5 +1,7 @@
 {
   "type": "user",
+  "name": "john_doe",
+  "timestamp": "2024-01-15T10:30:00Z",
   "tags": ["customer", "premium", "verified"],
   "data": {
     "username": "john_doe",
@@ -18,4 +20,4 @@
     },
     "joinDate": "2024-01-15T10:30:00Z"
   }
-} 
+}

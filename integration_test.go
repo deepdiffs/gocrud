@@ -148,6 +148,12 @@ func TestCRUDIntegration(t *testing.T) {
 				if out.ID == "" {
 					t.Fatalf("empty ID for %s", cases[i].file)
 				}
+				if out.Name != cases[i].req.Name {
+					t.Fatalf("name mismatch: want %s got %s", cases[i].req.Name, out.Name)
+				}
+				if !out.Timestamp.Equal(cases[i].req.Timestamp) {
+					t.Fatalf("timestamp mismatch: want %s got %s", cases[i].req.Timestamp, out.Timestamp)
+				}
 				cases[i].itm = out
 			}
 
@@ -210,7 +216,17 @@ func TestCRUDIntegration(t *testing.T) {
 			if updated.Type != updReq.Type {
 				t.Errorf("update Type mismatch: want %s, got %s", updReq.Type, updated.Type)
 			}
-			if !bytes.Contains(updated.Data, []byte(`"price":899.99`)) {
+			if updated.Name != updReq.Name {
+				t.Errorf("update Name mismatch: want %s, got %s", updReq.Name, updated.Name)
+			}
+			if !updated.Timestamp.Equal(updReq.Timestamp) {
+				t.Errorf("update Timestamp mismatch: want %s, got %s", updReq.Timestamp, updated.Timestamp)
+			}
+			var updatedData map[string]interface{}
+			if err := json.Unmarshal([]byte(updated.Data), &updatedData); err != nil {
+				t.Fatalf("unmarshal updated data: %v", err)
+			}
+			if price, ok := updatedData["price"].(float64); !ok || price != 899.99 {
 				t.Errorf("updated data not applied: %s", updated.Data)
 			}
 
@@ -313,8 +329,48 @@ func TestCRUDIntegration(t *testing.T) {
 			if len(workouts) != 1 {
 				t.Fatalf("expected 1 workout item, got %d", len(workouts))
 			}
-			if workouts[0].Type != "running" {
-				t.Errorf("unexpected workout type: %s", workouts[0].Type)
+			if workouts[0].Type != models.ItemTypeWorkout {
+				t.Errorf("unexpected workout item type: %s", workouts[0].Type)
+			}
+			if workouts[0].Name != models.WorkoutTypeRunning {
+				t.Errorf("unexpected workout name: %s", workouts[0].Name)
+			}
+			workoutID := workouts[0].ID
+
+			// Re-post the same workout payload to verify idempotent creates
+			req, err = makeAuthenticatedRequest(http.MethodPost, testServerURL+"/workouts", bytes.NewReader(workoutPayload))
+			if err != nil {
+				t.Fatalf("creating POST /workouts (idempotent) request: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("POST /workouts idempotent error: %v", err)
+			}
+			if resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("POST /workouts idempotent status %d, body: %s", resp.StatusCode, body)
+			}
+			resp.Body.Close()
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/workouts", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for workouts list after idempotent POST: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /workouts after idempotent POST error: %v", err)
+			}
+			var workoutsAgain []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&workoutsAgain); err != nil {
+				t.Fatalf("decode workouts list after idempotent POST: %v", err)
+			}
+			resp.Body.Close()
+			if len(workoutsAgain) != 1 {
+				t.Fatalf("expected 1 workout item after idempotent POST, got %d", len(workoutsAgain))
+			}
+			if workoutsAgain[0].ID != workoutID {
+				t.Fatalf("workout ID changed after idempotent POST: before %s after %s", workoutID, workoutsAgain[0].ID)
 			}
 
 			// HEALTH: aggregate and list
@@ -358,31 +414,79 @@ func TestCRUDIntegration(t *testing.T) {
 				t.Fatalf("expected 2 health items, got %d", len(healthItems))
 			}
 
-			var hasHRV, hasSleep bool
+			idsByName := map[string]string{}
 			for _, itm := range healthItems {
-				switch itm.Type {
-				case "heart_rate_variability":
-					hasHRV = true
-					var summary models.HealthMetricSummary
-					if err := json.Unmarshal(itm.Data, &summary); err != nil {
-						t.Fatalf("unmarshal hrv summary: %v", err)
-					}
-					if summary.Count != 2 || summary.Total != 150 || summary.Average != 75 {
-						t.Fatalf("unexpected hrv summary: %+v", summary)
-					}
-				case "sleep_analysis":
-					hasSleep = true
-					var sleep models.SleepSummary
-					if err := json.Unmarshal(itm.Data, &sleep); err != nil {
-						t.Fatalf("unmarshal sleep summary: %v", err)
-					}
-					if sleep.DurationHours < 7.9 || sleep.DurationHours > 8.1 {
-						t.Fatalf("unexpected sleep duration: %+v", sleep)
-					}
+				idsByName[itm.Name] = itm.ID
+			}
+
+			// Re-post identical payload to confirm idempotent creates
+			req, err = makeAuthenticatedRequest(http.MethodPost, testServerURL+"/health", bytes.NewReader(healthPayload))
+			if err != nil {
+				t.Fatalf("creating POST /health idempotent request: %v", err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("POST /health idempotent error: %v", err)
+			}
+			if resp.StatusCode != http.StatusCreated {
+				body, _ := io.ReadAll(resp.Body)
+				t.Fatalf("POST /health idempotent status %d, body: %s", resp.StatusCode, body)
+			}
+			resp.Body.Close()
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/health", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for health list after idempotent POST: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /health after idempotent POST error: %v", err)
+			}
+			var healthAgain []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&healthAgain); err != nil {
+				t.Fatalf("decode health list after idempotent POST: %v", err)
+			}
+			resp.Body.Close()
+			if len(healthAgain) != 2 {
+				t.Fatalf("expected 2 health items after idempotent POST, got %d", len(healthAgain))
+			}
+			for _, itm := range healthAgain {
+				if prev, ok := idsByName[itm.Name]; !ok || prev != itm.ID {
+					t.Fatalf("health item changed after idempotent POST for %s: before %s after %s", itm.Name, prev, itm.ID)
 				}
 			}
-			if !hasHRV || !hasSleep {
-				t.Fatalf("health items missing expected types: hrv=%t sleep=%t", hasHRV, hasSleep)
+			healthItems = healthAgain
+
+			byName := map[string]models.Item{}
+			var names []string
+			for _, itm := range healthItems {
+				byName[itm.Name] = itm
+				names = append(names, itm.Name)
+			}
+
+			hrvItem, ok := byName[models.HealthMetricHeartRateVariability]
+			if !ok {
+				t.Fatalf("health items missing hrv entry; names=%v", names)
+			}
+			var summary models.HealthMetricSummary
+			if err := json.Unmarshal([]byte(hrvItem.Data), &summary); err != nil {
+				t.Fatalf("unmarshal hrv summary: %v", err)
+			}
+			if summary.Count != 2 || summary.Total != 150 || summary.Average != 75 {
+				t.Fatalf("unexpected hrv summary: %+v", summary)
+			}
+
+			sleepItem, ok := byName[models.HealthMetricSleepAnalysis]
+			if !ok {
+				t.Fatalf("health items missing sleep entry; names=%v", names)
+			}
+			var sleep models.SleepSummary
+			if err := json.Unmarshal([]byte(sleepItem.Data), &sleep); err != nil {
+				t.Fatalf("unmarshal sleep summary: %v", err)
+			}
+			if sleep.DurationHours < 7.9 || sleep.DurationHours > 8.1 {
+				t.Fatalf("unexpected sleep duration: %+v", sleep)
 			}
 
 			// DELETE all

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"gocrud/internal/models"
 )
@@ -124,6 +125,14 @@ func workoutToItemRequest(workoutRaw json.RawMessage, meta models.WorkoutMetadat
 		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: failed to parse workout data: %v", err)
 	}
 
+	start, _ := parseFlexibleTime(workoutData.StartTime)
+	if start.IsZero() {
+		start, _ = parseFlexibleTime(workoutData.EndTime)
+	}
+	if start.IsZero() {
+		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: start time is required")
+	}
+
 	// Create a simplified summary with only essential fields
 	summary := models.WorkoutSummary{
 		WorkoutID:       workoutData.WorkoutID,
@@ -135,28 +144,60 @@ func workoutToItemRequest(workoutRaw json.RawMessage, meta models.WorkoutMetadat
 		Intensity:       workoutData.Intensity,
 	}
 
+	normalizedName := normalizeWorkoutName(workoutData.WorkoutType)
+	if normalizedName == "" {
+		normalizedName = models.WorkoutTypeUnknown
+	}
+	summary.WorkoutType = normalizedName
+
 	// Marshal the summary to JSON for storage
 	summaryJSON, err := json.Marshal(summary)
 	if err != nil {
 		return models.CreateItemRequest{}, fmt.Errorf("marshal workout: failed to marshal summary: %v", err)
 	}
 
-	itemType := strings.TrimSpace(meta.WorkoutType)
-	if itemType == "" {
-		itemType = "workout"
-	}
-
-	tags := []string{"workout"}
-	if meta.WorkoutType != "" {
-		tags = append(tags, "type:"+meta.WorkoutType)
-	}
+	tags := []string{"workout", "name:" + normalizedName}
 	if meta.WorkoutID != "" {
 		tags = append(tags, "workoutId:"+meta.WorkoutID)
 	}
 
+	dedupID := meta.WorkoutID
+	if dedupID == "" {
+		dedupID = deterministicID(models.ItemTypeWorkout, normalizedName, start.UTC().Format(time.RFC3339Nano))
+	}
+
 	return models.CreateItemRequest{
-		Type: itemType,
-		Tags: tags,
-		Data: summaryJSON,
+		ID:        dedupID,
+		Type:      models.ItemTypeWorkout,
+		Name:      normalizedName,
+		Timestamp: start.UTC(),
+		Tags:      tags,
+		Data:      summaryJSON,
 	}, nil
+}
+
+// normalizeWorkoutName lowercases and snake_cases workout names, defaulting to a known constant.
+func normalizeWorkoutName(name string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(name))
+	if trimmed == "" {
+		return models.WorkoutTypeUnknown
+	}
+
+	snake := strings.ReplaceAll(trimmed, " ", "_")
+	switch snake {
+	case "outdoor_walk":
+		return models.WorkoutTypeOutdoorWalk
+	case "running":
+		return models.WorkoutTypeRunning
+	case "traditional_strength_training":
+		return models.WorkoutTypeTraditionalStrength
+	case "functional_strength_training":
+		return models.WorkoutTypeFunctionalStrength
+	case "cycling":
+		return models.WorkoutTypeCycling
+	case "mind_and_body":
+		return models.WorkoutTypeMindAndBody
+	default:
+		return snake
+	}
 }

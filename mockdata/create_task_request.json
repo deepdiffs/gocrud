@@ -1,5 +1,7 @@
 {
   "type": "task",
+  "name": "implement-auth-api",
+  "timestamp": "2024-02-01T10:00:00Z",
   "tags": ["work", "urgent", "backend"],
   "data": {
     "title": "Implement user authentication API",
@@ -30,4 +32,4 @@
       }
     ]
   }
-} 
+}
