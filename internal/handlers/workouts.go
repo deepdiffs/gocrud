@@ -18,7 +18,7 @@ func (h *Handler) WorkoutsHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.handleCreateWorkouts(w, r)
 	case http.MethodGet:
-		h.handleListItems(w, r)
+		h.handleListItemsForType(w, r, models.ItemTypeWorkout)
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)

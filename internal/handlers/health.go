@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +21,7 @@ func (h *Handler) HealthHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		h.handleCreateHealth(w, r)
 	case http.MethodGet:
-		h.handleListItems(w, r)
+		h.handleListItemsForType(w, r, models.ItemTypeHealthData)
 	default:
 		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
@@ -291,12 +292,29 @@ func computeSleepQuality(s models.SleepSample) string {
 
 // parseFlexibleTime handles the mix of RFC3339 and "2006-01-02 15:04:05 -0700" timestamps.
 func parseFlexibleTime(value string) (time.Time, error) {
-	if strings.TrimSpace(value) == "" {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
 		return time.Time{}, fmt.Errorf("empty time")
+	}
+
+	// Support epoch timestamps (seconds, milliseconds, microseconds, nanoseconds)
+	if epoch, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		switch len(trimmed) {
+		case 0:
+			return time.Time{}, fmt.Errorf("empty time")
+		case 1, 2, 3, 4, 5, 6, 7, 8, 9, 10:
+			return time.Unix(epoch, 0), nil
+		case 11, 12, 13:
+			return time.Unix(0, epoch*int64(time.Millisecond)), nil
+		case 14, 15, 16:
+			return time.Unix(0, epoch*int64(time.Microsecond)), nil
+		default:
+			return time.Unix(0, epoch), nil
+		}
 	}
 	layouts := []string{time.RFC3339, "2006-01-02 15:04:05 -0700", "2006-01-02 15:04:05 -0700 MST"}
 	for _, layout := range layouts {
-		if ts, err := time.Parse(layout, value); err == nil {
+		if ts, err := time.Parse(layout, trimmed); err == nil {
 			return ts, nil
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"sync"
+	"time"
 
 	"gocrud/internal/errors"
 	"gocrud/internal/models"
@@ -145,8 +146,8 @@ func (s *MemoryStore) DeleteItem(ctx context.Context, id string) error {
 }
 
 // ListItems returns all items in the store, optionally filtered by type and/or tags.
-func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*models.Item, error) {
-	s.logger.Printf("INFO: Starting ListItems operation - typeFilter: %q, tagFilters: %v", typeFilter, tagFilters)
+func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string, startTime, endTime *time.Time) ([]*models.Item, error) {
+	s.logger.Printf("INFO: Starting ListItems operation - typeFilter: %q, tagFilters: %v, startTime: %v, endTime: %v", typeFilter, tagFilters, startTime, endTime)
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -196,10 +197,25 @@ func (s *MemoryStore) ListItems(ctx context.Context, typeFilter string, tagFilte
 		return []*models.Item{}, nil
 	}
 
+	// Normalize time bounds to UTC for comparisons
+	var start, end time.Time
+	if startTime != nil {
+		start = startTime.UTC()
+	}
+	if endTime != nil {
+		end = endTime.UTC()
+	}
+
 	// Build result list
 	items := make([]*models.Item, 0, len(candidateIDs))
 	for id := range candidateIDs {
 		if item, exists := s.items[id]; exists {
+			if startTime != nil && item.Timestamp.Before(start) {
+				continue
+			}
+			if endTime != nil && item.Timestamp.After(end) {
+				continue
+			}
 			items = append(items, item)
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"gocrud/internal/models"
 )
@@ -14,7 +15,7 @@ type Store interface {
 	SaveItem(ctx context.Context, item *models.Item) error
 	GetItem(ctx context.Context, id string) (*models.Item, error)
 	DeleteItem(ctx context.Context, id string) error
-	ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*models.Item, error)
+	ListItems(ctx context.Context, typeFilter string, tagFilters []string, startTime, endTime *time.Time) ([]*models.Item, error)
 }
 
 // NewStore creates a Store implementation based on the STORAGE_BACKEND environment variable.

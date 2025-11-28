@@ -44,20 +44,15 @@ func main() {
 		logger.Fatalf("FATAL: failed to initialize items store: %v", err)
 	}
 
-	workoutsStore, err := store.NewStoreWithCollection(ctx, logger, "workouts")
-	if err != nil {
-		logger.Fatalf("FATAL: failed to initialize workouts store: %v", err)
-	}
-
-	healthStore, err := store.NewStoreWithCollection(ctx, logger, "healthstuff")
+	sharedHealthStore, err := store.NewStoreWithCollection(ctx, logger, "healthstuff")
 	if err != nil {
 		logger.Fatalf("FATAL: failed to initialize health store: %v", err)
 	}
 
 	// Create handlers for each endpoint
 	itemsHandler := handlers.NewHandler(itemsStore, logger)
-	workoutsHandler := handlers.NewHandler(workoutsStore, logger)
-	healthHandler := handlers.NewHandler(healthStore, logger)
+	workoutsHandler := handlers.NewHandler(sharedHealthStore, logger)
+	healthHandler := handlers.NewHandler(sharedHealthStore, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", itemsHandler.ItemsHandler)

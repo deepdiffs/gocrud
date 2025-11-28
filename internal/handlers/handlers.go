@@ -41,6 +41,17 @@ func (h *Handler) ItemsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// handleListItemsForType enforces a specific item type when listing.
+func (h *Handler) handleListItemsForType(w http.ResponseWriter, r *http.Request, forcedType string) {
+	q := r.URL.Query()
+	q.Set("type", forcedType)
+	clone := *r
+	urlCopy := *r.URL
+	urlCopy.RawQuery = q.Encode()
+	clone.URL = &urlCopy
+	h.handleListItems(w, &clone)
+}
+
 // ItemHandler routes requests with ID: GET, PUT, DELETE.
 func (h *Handler) ItemHandler(w http.ResponseWriter, r *http.Request) {
 	// Extract ID from path (last segment after the final /)
@@ -199,7 +210,31 @@ func (h *Handler) handleListItems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items, err := h.store.ListItems(r.Context(), typeFilter, tagFilters)
+	var startTimePtr, endTimePtr *time.Time
+	if startStr := strings.TrimSpace(r.URL.Query().Get("startTime")); startStr != "" {
+		start, err := parseFlexibleTime(startStr)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("invalid startTime: %v", err), http.StatusBadRequest)
+			return
+		}
+		start = start.UTC()
+		startTimePtr = &start
+	}
+	if endStr := strings.TrimSpace(r.URL.Query().Get("endTime")); endStr != "" {
+		end, err := parseFlexibleTime(endStr)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("invalid endTime: %v", err), http.StatusBadRequest)
+			return
+		}
+		end = end.UTC()
+		endTimePtr = &end
+	}
+	if startTimePtr != nil && endTimePtr != nil && endTimePtr.Before(*startTimePtr) {
+		http.Error(w, "endTime must be after startTime", http.StatusBadRequest)
+		return
+	}
+
+	items, err := h.store.ListItems(r.Context(), typeFilter, tagFilters, startTimePtr, endTimePtr)
 	if err != nil {
 		h.logger.Printf("error listing items: %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)

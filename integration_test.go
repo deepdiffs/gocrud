@@ -48,18 +48,14 @@ func setupTestServer(t *testing.T, backend string) (string, func()) {
 	if err != nil {
 		t.Fatalf("failed to create store with backend %s: %v", backend, err)
 	}
-	workoutsStore, err := store.NewStoreWithCollection(testCtx, logger, "workouts")
-	if err != nil {
-		t.Fatalf("failed to create workouts store with backend %s: %v", backend, err)
-	}
-	healthStore, err := store.NewStoreWithCollection(testCtx, logger, "health")
+	sharedHealthStore, err := store.NewStoreWithCollection(testCtx, logger, "health")
 	if err != nil {
 		t.Fatalf("failed to create health store with backend %s: %v", backend, err)
 	}
 
 	itemsHandler := handlers.NewHandler(storeInstance, logger)
-	workoutsHandler := handlers.NewHandler(workoutsStore, logger)
-	healthHandler := handlers.NewHandler(healthStore, logger)
+	workoutsHandler := handlers.NewHandler(sharedHealthStore, logger)
+	healthHandler := handlers.NewHandler(sharedHealthStore, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/items", itemsHandler.ItemsHandler)
@@ -373,6 +369,61 @@ func TestCRUDIntegration(t *testing.T) {
 				t.Fatalf("workout ID changed after idempotent POST: before %s after %s", workoutID, workoutsAgain[0].ID)
 			}
 
+			// WORKOUTS: time window queries
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/workouts?startTime=2024-01-01T00:00:00Z&endTime=2024-01-01T00:10:00Z", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for workouts time range: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /workouts time range error: %v", err)
+			}
+			var workoutsWindow []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&workoutsWindow); err != nil {
+				t.Fatalf("decode workouts time range: %v", err)
+			}
+			resp.Body.Close()
+			if len(workoutsWindow) != 1 {
+				t.Fatalf("expected 1 workout in time window, got %d", len(workoutsWindow))
+			}
+			if !workoutsWindow[0].Timestamp.Equal(workoutsAgain[0].Timestamp) {
+				t.Fatalf("workout timestamp mismatch in window: want %s got %s", workoutsAgain[0].Timestamp, workoutsWindow[0].Timestamp)
+			}
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/workouts?startTime=2024-01-01T00:01:00Z", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for workouts filtered window: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /workouts filtered window error: %v", err)
+			}
+			var workoutsFiltered []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&workoutsFiltered); err != nil {
+				t.Fatalf("decode workouts filtered window: %v", err)
+			}
+			resp.Body.Close()
+			if len(workoutsFiltered) != 0 {
+				t.Fatalf("expected 0 workouts after startTime filter, got %d", len(workoutsFiltered))
+			}
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/workouts?startTime=1704067200&endTime=1704069000", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for workouts epoch window: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /workouts epoch window error: %v", err)
+			}
+			var workoutsEpoch []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&workoutsEpoch); err != nil {
+				t.Fatalf("decode workouts epoch window: %v", err)
+			}
+			resp.Body.Close()
+			if len(workoutsEpoch) != 1 {
+				t.Fatalf("expected 1 workout in epoch window, got %d", len(workoutsEpoch))
+			}
+
 			// HEALTH: aggregate and list
 			healthPayload := []byte(`{"data":{"metrics":[{"name":"heart_rate_variability","units":"ms","data":[{"qty":50,"date":"2024-02-01T00:00:00Z"},{"qty":100,"date":"2024-02-01T01:00:00Z"}]},{"name":"sleep_analysis","units":"hr","data":[{"sleepStart":"2024-02-01T00:00:00Z","sleepEnd":"2024-02-01T08:00:00Z","rem":2.0,"deep":1.5,"core":4.0,"awake":0.5,"totalSleep":8.0,"inBed":8.5,"inBedStart":"2024-02-01T00:00:00Z","inBedEnd":"2024-02-01T08:30:00Z","date":"2024-02-01","source":"watch"}]}]}}`)
 			req, err = makeAuthenticatedRequest(http.MethodPost, testServerURL+"/health", bytes.NewReader(healthPayload))
@@ -495,6 +546,64 @@ func TestCRUDIntegration(t *testing.T) {
 			}
 			if sleep.DurationHours < 7.9 || sleep.DurationHours > 8.1 {
 				t.Fatalf("unexpected sleep duration: %+v", sleep)
+			}
+
+			// HEALTH: time window queries
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/health?startTime=2024-02-01T00:30:00Z", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for health startTime filter: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /health startTime filter error: %v", err)
+			}
+			var healthWindow []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&healthWindow); err != nil {
+				t.Fatalf("decode health startTime filter: %v", err)
+			}
+			resp.Body.Close()
+			if len(healthWindow) != 1 {
+				t.Fatalf("expected 1 health item after startTime filter, got %d", len(healthWindow))
+			}
+			if healthWindow[0].Name != models.HealthMetricHeartRateVariability {
+				t.Fatalf("unexpected health item returned for startTime filter: %s", healthWindow[0].Name)
+			}
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/health?startTime=2024-02-01T00:00:00Z&endTime=2024-02-01T00:10:00Z", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for health time range filter: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /health time range filter error: %v", err)
+			}
+			var healthRange []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&healthRange); err != nil {
+				t.Fatalf("decode health time range filter: %v", err)
+			}
+			resp.Body.Close()
+			if len(healthRange) != 1 {
+				t.Fatalf("expected 1 health item in time range, got %d", len(healthRange))
+			}
+			if healthRange[0].Name != models.HealthMetricSleepAnalysis {
+				t.Fatalf("unexpected health item returned for time range filter: %s", healthRange[0].Name)
+			}
+
+			req, err = makeAuthenticatedRequest(http.MethodGet, testServerURL+"/health?startTime=1706745600000&endTime=1706752800000", nil)
+			if err != nil {
+				t.Fatalf("creating GET request for health epoch window: %v", err)
+			}
+			resp, err = client.Do(req)
+			if err != nil {
+				t.Fatalf("GET /health epoch window error: %v", err)
+			}
+			var healthEpoch []models.Item
+			if err := json.NewDecoder(resp.Body).Decode(&healthEpoch); err != nil {
+				t.Fatalf("decode health epoch window: %v", err)
+			}
+			resp.Body.Close()
+			if len(healthEpoch) != 2 {
+				t.Fatalf("expected 2 health items in epoch window, got %d", len(healthEpoch))
 			}
 
 			// DELETE all

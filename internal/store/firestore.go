@@ -125,8 +125,8 @@ func (s *FirestoreStore) DeleteItem(ctx context.Context, id string) error {
 }
 
 // ListItems returns all items in the store, optionally filtered by type and/or tags.
-func (s *FirestoreStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string) ([]*models.Item, error) {
-	s.logger.Printf("INFO: Starting ListItems operation in collection: %s - typeFilter: %q, tagFilters: %v", s.collectionName, typeFilter, tagFilters)
+func (s *FirestoreStore) ListItems(ctx context.Context, typeFilter string, tagFilters []string, startTime, endTime *time.Time) ([]*models.Item, error) {
+	s.logger.Printf("INFO: Starting ListItems operation in collection: %s - typeFilter: %q, tagFilters: %v, startTime: %v, endTime: %v", s.collectionName, typeFilter, tagFilters, startTime, endTime)
 
 	query := s.client.Collection(s.collectionName).Query
 
@@ -140,6 +140,15 @@ func (s *FirestoreStore) ListItems(ctx context.Context, typeFilter string, tagFi
 	for _, tag := range tagFilters {
 		query = query.Where("tags", "array-contains", tag)
 		s.logger.Printf("INFO: Applied tag filter: %s", tag)
+	}
+
+	if startTime != nil {
+		query = query.Where("timestamp", ">=", startTime.UTC())
+		s.logger.Printf("INFO: Applied startTime filter: %s", startTime.UTC())
+	}
+	if endTime != nil {
+		query = query.Where("timestamp", "<=", endTime.UTC())
+		s.logger.Printf("INFO: Applied endTime filter: %s", endTime.UTC())
 	}
 
 	// Note: Firestore only supports one array-contains per query.
