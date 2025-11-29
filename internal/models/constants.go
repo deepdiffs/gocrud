@@ -4,6 +4,7 @@ package models
 const (
 	ItemTypeWorkout    = "Workout"
 	ItemTypeHealthData = "HealthData"
+	ItemTypeJournal    = "Journal"
 )
 
 // Well-known workout types. These mirror common HealthAutoExport workout names.
