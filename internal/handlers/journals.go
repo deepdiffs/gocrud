@@ -262,6 +262,20 @@ func itemToJournalEntry(item *models.Item) (models.JournalEntry, error) {
 		}
 	}
 
+	// Image fields are top-level fields in the document, read directly from Item
+	var imageData string
+	var imageFormat string
+	var imageSizeBytes int64
+	if item.ImageData != nil {
+		imageData = *item.ImageData
+	}
+	if item.ImageFormat != nil {
+		imageFormat = *item.ImageFormat
+	}
+	if item.ImageSizeBytes != nil {
+		imageSizeBytes = *item.ImageSizeBytes
+	}
+
 	// Parse tags into People, Emotions, and Topics
 	var people []string
 	var emotions []string
@@ -313,11 +327,14 @@ func itemToJournalEntry(item *models.Item) (models.JournalEntry, error) {
 	date := item.Timestamp.Format(time.RFC3339)
 
 	return models.JournalEntry{
-		Title:    item.Name,
-		Date:     date,
-		Emotions: emotions,
-		People:   people,
-		Topics:   topics,
-		Content:  content,
+		Title:          item.Name,
+		Date:           date,
+		Emotions:       emotions,
+		People:         people,
+		Topics:         topics,
+		Content:        content,
+		ImageData:      imageData,
+		ImageFormat:    imageFormat,
+		ImageSizeBytes: imageSizeBytes,
 	}, nil
 }
