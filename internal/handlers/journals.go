@@ -238,27 +238,39 @@ func (h *Handler) handleListJournals(w http.ResponseWriter, r *http.Request) {
 // itemToJournalEntry converts an Item back to a JournalEntry, parsing prefixed tags.
 // Returns an error if the item doesn't have the expected structure (old data).
 func itemToJournalEntry(item *models.Item) (models.JournalEntry, error) {
-	// Extract content from data
+	// Extract content and image fields from data
 	var content string
+	var imageData string
+	var imageFormat string
+	var imageSizeBytes int64
+
+	var dataPayload map[string]interface{}
 	if dataMap, ok := item.Data.(map[string]interface{}); ok {
-		if contentVal, ok := dataMap["content"].(string); ok {
-			content = contentVal
-		}
+		dataPayload = dataMap
 	} else if dataBytes, ok := item.Data.([]byte); ok {
 		// Try to unmarshal if Data is json.RawMessage or []byte
-		var dataPayload map[string]interface{}
-		if err := json.Unmarshal(dataBytes, &dataPayload); err == nil {
-			if contentVal, ok := dataPayload["content"].(string); ok {
-				content = contentVal
-			}
+		if err := json.Unmarshal(dataBytes, &dataPayload); err != nil {
+			dataPayload = nil
 		}
 	} else if dataStr, ok := item.Data.(string); ok {
 		// Try to unmarshal if Data is a JSON string
-		var dataPayload map[string]interface{}
-		if err := json.Unmarshal([]byte(dataStr), &dataPayload); err == nil {
-			if contentVal, ok := dataPayload["content"].(string); ok {
-				content = contentVal
-			}
+		if err := json.Unmarshal([]byte(dataStr), &dataPayload); err != nil {
+			dataPayload = nil
+		}
+	}
+
+	if dataPayload != nil {
+		if contentVal, ok := dataPayload["content"].(string); ok {
+			content = contentVal
+		}
+		if imageDataVal, ok := dataPayload["image_data"].(string); ok {
+			imageData = imageDataVal
+		}
+		if imageFormatVal, ok := dataPayload["image_format"].(string); ok {
+			imageFormat = imageFormatVal
+		}
+		if imageSizeBytesVal, ok := dataPayload["image_size_bytes"].(float64); ok {
+			imageSizeBytes = int64(imageSizeBytesVal)
 		}
 	}
 
@@ -313,11 +325,14 @@ func itemToJournalEntry(item *models.Item) (models.JournalEntry, error) {
 	date := item.Timestamp.Format(time.RFC3339)
 
 	return models.JournalEntry{
-		Title:    item.Name,
-		Date:     date,
-		Emotions: emotions,
-		People:   people,
-		Topics:   topics,
-		Content:  content,
+		Title:          item.Name,
+		Date:           date,
+		Emotions:       emotions,
+		People:         people,
+		Topics:         topics,
+		Content:        content,
+		ImageData:      imageData,
+		ImageFormat:    imageFormat,
+		ImageSizeBytes: imageSizeBytes,
 	}, nil
 }
